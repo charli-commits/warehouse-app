@@ -1,0 +1,9 @@
+node_modules
+server/node_modules
+client/node_modules
+client/dist
+server/prisma/dev.db
+server/prisma/dev.db-journal
+server/.env
+*.env
+.git
