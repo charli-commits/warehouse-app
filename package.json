@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "concurrently \"npm run dev --prefix server\" \"npm run dev --prefix client\"",
     "install:all": "npm install && npm install --prefix server && npm install --prefix client",
-    "build": "npm install --prefix server && npm install --prefix client && npm run build --prefix client && npm run db:generate --prefix server",
+    "build": "npm install --prefix server && npm install --prefix client && npm run build --prefix client && cd server && npx prisma generate && npx prisma migrate deploy",
     "start": "NODE_ENV=production node server/src/index.js",
     "db:migrate": "npm run db:migrate --prefix server"
   },
