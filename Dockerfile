@@ -10,20 +10,21 @@ RUN cd server && npm install --production=false
 COPY client/package*.json ./client/
 RUN cd client && npm install --production=false
 
-# Copiar y compilar el cliente
+# Compilar el cliente
 COPY client/ ./client/
 RUN cd client && npm run build
 
-# Copiar el servidor y el schema de Prisma
+# Copiar el servidor
 COPY server/ ./server/
-RUN cd server && npx prisma generate
 
-# Copiar el package.json raíz (para scripts)
-COPY package.json ./
+# Generar Prisma client
+RUN cd server && npx prisma generate
 
 EXPOSE 3001
 
 ENV NODE_ENV=production
 
+WORKDIR /app/server
+
 # Migrar BD y arrancar
-CMD cd server && npx prisma migrate deploy && node src/index.js
+CMD ["sh", "-c", "npx prisma migrate deploy && node src/index.js"]
