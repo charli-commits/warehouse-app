@@ -1,0 +1,47 @@
+services:
+  - type: web
+    name: warehouse-app
+    env: node
+    buildCommand: npm run build
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        fromDatabase:
+          name: warehouse-db
+          property: connectionString
+      - key: JWT_SECRET
+        generateValue: true
+      - key: ODOO_URL
+        sync: false
+      - key: ODOO_DB
+        sync: false
+      - key: ODOO_USER
+        sync: false
+      - key: ODOO_PASSWORD
+        sync: false
+      - key: GLS_UID
+        sync: false
+      - key: GLS_PASSWORD
+        sync: false
+      - key: GLS_API_URL
+        sync: false
+      - key: GLS_TEST_MODE
+        value: "false"
+      - key: GLS_SENDER_NAME
+        sync: false
+      - key: GLS_SENDER_ADDRESS
+        sync: false
+      - key: GLS_SENDER_ZIP
+        sync: false
+      - key: GLS_SENDER_CITY
+        sync: false
+      - key: GLS_SENDER_COUNTRY
+        value: ES
+
+databases:
+  - name: warehouse-db
+    databaseName: warehouse
+    user: warehouse
+    plan: free

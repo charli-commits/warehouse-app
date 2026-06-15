@@ -1,0 +1,266 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Part {
+  id               Int      @id @default(autoincrement())
+  code             String   @unique
+  name             String
+  description      String?
+  category         String?
+  unit             String   @default("ud")
+  stock_current    Float    @default(0) // suma de todos los PartLocation
+  stock_min        Float    @default(0)
+  location         String?  // deprecated — mantenido para compatibilidad
+  odoo_product_id  Int?
+  odoo_product_name String?
+  manufacturer     String?
+  cost_price       Float?
+  image_url        String?
+  created_at       DateTime @default(now())
+  updated_at       DateTime @updatedAt
+
+  movements         StockMovement[]
+  purchaseLines     PurchaseOrderLine[]
+  deliveryLines     DeliveryNoteLine[]
+  locations         PartLocation[]
+  lots              Lot[]
+  disassemblyLines  DisassemblyLine[]
+  auditLines        AuditLine[]
+}
+
+model PartLocation {
+  id        Int    @id @default(autoincrement())
+  part_id   Int
+  location  String
+  stock     Float  @default(0)
+
+  part Part @relation(fields: [part_id], references: [id], onDelete: Cascade)
+
+  @@unique([part_id, location])
+}
+
+model StockMovement {
+  id             Int      @id @default(autoincrement())
+  part_id        Int
+  type           String   // IN / OUT
+  quantity       Float
+  reference_type String?  // PURCHASE / DELIVERY / ADJUSTMENT
+  reference_id   Int?
+  notes          String?
+  user_name      String?
+  created_at     DateTime @default(now())
+
+  part Part @relation(fields: [part_id], references: [id])
+}
+
+model Supplier {
+  id              Int      @id @default(autoincrement())
+  name            String   @unique
+  contact_name    String?
+  email           String?
+  phone           String?
+  lead_time_days  Int?
+  notes           String?
+  odoo_partner_id Int?     @unique  // null = manually created
+  manufacturer    String?
+  hidden          Boolean  @default(false)
+  created_at      DateTime @default(now())
+
+  purchaseOrders PurchaseOrder[]
+}
+
+model PurchaseOrder {
+  id          Int      @id @default(autoincrement())
+  reference   String?  // OC-2026-TS-042
+  supplier_id Int
+  status      String   @default("DRAFT") // DRAFT/SENT/LOCATING/PARTIAL/RECEIVED/CANCELLED
+  order_date  DateTime @default(now())
+  eta         DateTime?
+  notes       String?
+  created_at  DateTime @default(now())
+
+  supplier Supplier           @relation(fields: [supplier_id], references: [id])
+  lines    PurchaseOrderLine[]
+  lots     Lot[]
+}
+
+model PurchaseOrderLine {
+  id                 Int   @id @default(autoincrement())
+  purchase_order_id  Int
+  part_id            Int
+  quantity_ordered   Float
+  quantity_validated Float @default(0) // confirmado que llegó (step 1)
+  quantity_received  Float @default(0) // ubicado en almacén (step 2)
+  unit_price         Float?
+
+  order        PurchaseOrder         @relation(fields: [purchase_order_id], references: [id], onDelete: Cascade)
+  part         Part                  @relation(fields: [part_id], references: [id])
+  receiptLines PurchaseReceiptLine[]
+}
+
+model PurchaseReceiptLine {
+  id                     Int      @id @default(autoincrement())
+  purchase_order_line_id Int
+  location               String
+  quantity               Float
+  user_name              String?
+  created_at             DateTime @default(now())
+
+  line PurchaseOrderLine @relation(fields: [purchase_order_line_id], references: [id], onDelete: Cascade)
+}
+
+model User {
+  id         Int      @id @default(autoincrement())
+  name       String   @unique
+  pin        String   // bcrypt hash del PIN
+  role       String   @default("operator") // operator / admin
+  active     Boolean  @default(true)
+  created_at DateTime @default(now())
+
+  pickingLines      PickingLine[]
+  deliveries        DeliveryNote[]
+}
+
+model DeliveryNote {
+  id                Int      @id @default(autoincrement())
+  status            String   @default("DRAFT") // DRAFT/CONFIRMED/PICKING/READY/SHIPPED/DELIVERED
+  odoo_partner_id   Int?
+  odoo_partner_name String?
+  shipping_address  String?  // JSON string
+  notes             String?
+  client_ref        String?  // nº pedido Odoo u otra referencia editable
+  carrier           String?  // empresa de transporte: GLS, DACHSER...
+  gls_tracking      String?  // tracking number
+  gls_label_url     String?
+  created_by_id     Int?
+  created_at        DateTime @default(now())
+
+  lines        DeliveryNoteLine[]
+  pickingLines PickingLine[]
+  events       DeliveryNoteEvent[]
+  createdBy    User?              @relation(fields: [created_by_id], references: [id])
+}
+
+model DeliveryNoteEvent {
+  id               Int      @id @default(autoincrement())
+  delivery_note_id Int
+  status           String
+  user_name        String?
+  created_at       DateTime @default(now())
+
+  delivery DeliveryNote @relation(fields: [delivery_note_id], references: [id], onDelete: Cascade)
+}
+
+model DeliveryNoteLine {
+  id               Int   @id @default(autoincrement())
+  delivery_note_id Int
+  part_id          Int
+  quantity         Float
+
+  delivery    DeliveryNote @relation(fields: [delivery_note_id], references: [id], onDelete: Cascade)
+  part        Part         @relation(fields: [part_id], references: [id])
+  pickingLine PickingLine?
+}
+
+model PickingLine {
+  id                    Int      @id @default(autoincrement())
+  delivery_note_line_id Int      @unique
+  delivery_note_id      Int
+  verified_by_id        Int?
+  forced                Boolean  @default(false)
+  force_reason          String?
+  scanned_location      String?
+  verified_at           DateTime @default(now())
+
+  line          DeliveryNoteLine @relation(fields: [delivery_note_line_id], references: [id], onDelete: Cascade)
+  delivery      DeliveryNote     @relation(fields: [delivery_note_id], references: [id], onDelete: Cascade)
+  verifiedBy    User?            @relation(fields: [verified_by_id], references: [id])
+}
+
+model Lot {
+  id                Int      @id @default(autoincrement())
+  part_id           Int
+  lot_number        String   // = referencia OC (OC-2026-STF-001)
+  purchase_order_id Int?
+  created_at        DateTime @default(now())
+
+  part      Part           @relation(fields: [part_id], references: [id])
+  order     PurchaseOrder? @relation(fields: [purchase_order_id], references: [id], onDelete: SetNull)
+  locations LotLocation[]
+
+  @@unique([part_id, lot_number])
+}
+
+model LotLocation {
+  id       Int    @id @default(autoincrement())
+  lot_id   Int
+  location String
+  stock    Float  @default(0)
+
+  lot Lot @relation(fields: [lot_id], references: [id], onDelete: Cascade)
+
+  @@unique([lot_id, location])
+}
+
+model Audit {
+  id         Int       @id @default(autoincrement())
+  name       String
+  status     String    @default("OPEN") // OPEN / CLOSED
+  notes      String?
+  created_at DateTime  @default(now())
+  closed_at  DateTime?
+
+  lines AuditLine[]
+}
+
+model AuditLine {
+  id             Int     @id @default(autoincrement())
+  audit_id       Int
+  part_id        Int
+  location       String
+  system_stock   Float
+  counted_stock  Float?  // null = no contado aún
+  difference     Float?  // counted - system, null si no contado
+  adjusted       Boolean @default(false)
+
+  audit Audit @relation(fields: [audit_id], references: [id], onDelete: Cascade)
+  part  Part  @relation(fields: [part_id], references: [id])
+
+  @@unique([audit_id, part_id, location])
+}
+
+model Disassembly {
+  id         Int      @id @default(autoincrement())
+  reference  String
+  notes      String?
+  created_at DateTime @default(now())
+
+  lines DisassemblyLine[]
+}
+
+model DisassemblyLine {
+  id             Int    @id @default(autoincrement())
+  disassembly_id Int
+  part_id        Int
+  quantity       Float
+  location       String
+
+  disassembly Disassembly @relation(fields: [disassembly_id], references: [id], onDelete: Cascade)
+  part        Part        @relation(fields: [part_id], references: [id])
+}
+
+model OdooCache {
+  id        Int      @id @default(autoincrement())
+  type      String   // PRODUCT / PARTNER
+  odoo_id   Int
+  data      String   // JSON string
+  last_sync DateTime @default(now())
+
+  @@unique([type, odoo_id])
+}
