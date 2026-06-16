@@ -52,16 +52,6 @@ router.get('/users', async (req, res) => {
   res.json(users)
 })
 
-// POST /api/auth/seed — solo funciona si no hay usuarios (bootstrap inicial)
-router.post('/seed', async (req, res) => {
-  const count = await prisma.user.count()
-  if (count > 0) return res.status(403).json({ error: 'Ya existen usuarios' })
-  const { name, pin, role } = req.body
-  const hashed = await bcrypt.hash(String(pin), 10)
-  const user = await prisma.user.create({ data: { name, pin: hashed, role: role || 'admin', active: true } })
-  res.json({ id: user.id, name: user.name, role: user.role })
-})
-
 // POST /api/auth/users — crear usuario (requiere auth, verificado por middleware global)
 router.post('/users', async (req, res) => {
   const { name, pin, role } = req.body
