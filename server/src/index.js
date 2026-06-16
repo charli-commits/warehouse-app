@@ -20,27 +20,7 @@ app.use(cors({
   credentials: true,
 }))
 
-app.use(express.json({ limit: '10mb' }))
-
-// TEMP: importar proveedores y piezas desde SQLite
-app.post('/api/admin/import', require('./middleware/auth'), async (req, res) => {
-  if (req.user.role !== 'admin') return res.status(403).json({ error: 'Solo admin' })
-  const prisma = require('./lib/prisma')
-  const { suppliers = [], parts = [] } = req.body
-  try {
-    for (const s of suppliers) {
-      await prisma.supplier.upsert({ where: { id: s.id }, update: {}, create: { id: s.id, name: s.name, email: s.email, phone: s.phone, address: s.address, notes: s.notes } })
-    }
-    const BATCH = 200
-    for (let i = 0; i < parts.length; i += BATCH) {
-      await prisma.$transaction(parts.slice(i, i + BATCH).map(p => prisma.part.upsert({
-        where: { id: p.id }, update: {},
-        create: { id: p.id, code: p.code, name: p.name, description: p.description, category: p.category, unit: p.unit ?? 'ud', stock_current: p.stock_current ?? 0, stock_min: p.stock_min ?? 0, location: p.location, odoo_product_id: p.odoo_product_id, odoo_product_name: p.odoo_product_name, manufacturer: p.manufacturer, cost_price: p.cost_price, image_url: p.image_url }
-      })))
-    }
-    res.json({ ok: true, suppliers: suppliers.length, parts: parts.length })
-  } catch (e) { res.status(500).json({ error: e.message }) }
-})
+app.use(express.json())
 app.use('/uploads', express.static(require('path').join(__dirname, '..', 'uploads')))
 
 app.get('/api/health', (req, res) => res.json({ ok: true }))
