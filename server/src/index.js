@@ -21,6 +21,24 @@ app.use(cors({
 }))
 
 app.use(express.json())
+
+// TEMP: importar PartLocation
+app.post('/api/admin/import-locations', require('./middleware/auth'), async (req, res) => {
+  if (req.user.role !== 'admin') return res.status(403).json({ error: 'Solo admin' })
+  const prisma = require('./lib/prisma')
+  const { partLocations = [] } = req.body
+  try {
+    const BATCH = 200
+    for (let i = 0; i < partLocations.length; i += BATCH) {
+      await prisma.$transaction(partLocations.slice(i, i + BATCH).map(l => prisma.partLocation.upsert({
+        where: { part_id_location: { part_id: l.part_id, location: l.location } },
+        update: { stock: l.stock },
+        create: { id: l.id, part_id: l.part_id, location: l.location, stock: l.stock }
+      })))
+    }
+    res.json({ ok: true, count: partLocations.length })
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
 app.use('/uploads', express.static(require('path').join(__dirname, '..', 'uploads')))
 
 app.get('/api/health', (req, res) => res.json({ ok: true }))
