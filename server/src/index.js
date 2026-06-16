@@ -60,7 +60,7 @@ app.post('/api/admin/import-all', require('./middleware/auth'), async (req, res)
       await prisma.audit.upsert({ where: { id: a.id }, update: {}, create: { name: a.name, status: a.status, notes: a.notes ?? null, created_at: new Date(a.created_at), closed_at: a.completed_at ? new Date(a.completed_at) : null } })
     }
     for (const a of auditLines) {
-      await prisma.auditLine.upsert({ where: { id: a.id }, update: {}, create: { id: a.id, audit_id: a.audit_id, part_id: a.part_id, expected_stock: a.expected_stock, counted_stock: a.counted_stock, location: a.location } })
+      await prisma.auditLine.upsert({ where: { id: a.id }, update: {}, create: { audit_id: a.audit_id, part_id: a.part_id, location: a.location, system_stock: a.expected_stock ?? 0, counted_stock: a.counted_stock ?? null, difference: a.counted_stock != null ? (a.counted_stock - (a.expected_stock ?? 0)) : null } })
     }
     res.json({ ok: true, partLocations: partLocations.length, stockMovements: stockMovements.length, users: users.length })
   } catch (e) { res.status(500).json({ error: e.message }) }
