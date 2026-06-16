@@ -57,7 +57,7 @@ app.post('/api/admin/import-all', require('./middleware/auth'), async (req, res)
     }
     // Auditorías
     for (const a of audits) {
-      await prisma.audit.upsert({ where: { id: a.id }, update: {}, create: { id: a.id, name: a.name, status: a.status, created_at: new Date(a.created_at), completed_at: a.completed_at ? new Date(a.completed_at) : null } })
+      await prisma.audit.upsert({ where: { id: a.id }, update: {}, create: { name: a.name, status: a.status, notes: a.notes ?? null, created_at: new Date(a.created_at), closed_at: a.completed_at ? new Date(a.completed_at) : null } })
     }
     for (const a of auditLines) {
       await prisma.auditLine.upsert({ where: { id: a.id }, update: {}, create: { id: a.id, audit_id: a.audit_id, part_id: a.part_id, expected_stock: a.expected_stock, counted_stock: a.counted_stock, location: a.location } })
