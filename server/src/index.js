@@ -20,54 +20,10 @@ app.use(cors({
   credentials: true,
 }))
 
-app.use(express.json({ limit: '20mb' }))
+app.use(express.json())
 app.use('/uploads', express.static(require('path').join(__dirname, '..', 'uploads')))
 
 app.get('/api/health', (req, res) => res.json({ ok: true }))
-
-// TEMP: migración única de datos SQLite → PG
-app.post('/api/admin/migrate', require('./middleware/auth'), async (req, res) => {
-  if (req.user.role !== 'admin') return res.status(403).json({ error: 'Solo admin' })
-  const prisma = require('./lib/prisma')
-  const { users, suppliers, parts, stockMovements, purchaseOrders, purchaseOrderLines } = req.body
-  try {
-    // Usuarios (skip Admin que ya existe)
-    for (const u of users) {
-      await prisma.user.upsert({ where: { name: u.name }, update: {}, create: { name: u.name, pin: u.pin, role: u.role, active: u.active === 1 || u.active === true } })
-    }
-    // Proveedores
-    for (const s of suppliers) {
-      await prisma.supplier.upsert({ where: { id: s.id }, update: {}, create: { id: s.id, name: s.name, email: s.email, phone: s.phone, address: s.address, notes: s.notes } })
-    }
-    // Piezas (en lotes)
-    const BATCH = 200
-    for (let i = 0; i < parts.length; i += BATCH) {
-      await prisma.$transaction(parts.slice(i, i + BATCH).map(p => prisma.part.upsert({
-        where: { id: p.id },
-        update: {},
-        create: { id: p.id, code: p.code, name: p.name, description: p.description, category: p.category, unit: p.unit ?? 'ud', stock_current: p.stock_current ?? 0, stock_min: p.stock_min ?? 0, location: p.location, odoo_product_id: p.odoo_product_id, odoo_product_name: p.odoo_product_name, manufacturer: p.manufacturer, cost_price: p.cost_price, image_url: p.image_url }
-      })))
-    }
-    // Movimientos de stock (en lotes)
-    for (let i = 0; i < stockMovements.length; i += BATCH) {
-      await prisma.$transaction(stockMovements.slice(i, i + BATCH).map(m => prisma.stockMovement.upsert({
-        where: { id: m.id },
-        update: {},
-        create: { id: m.id, part_id: m.part_id, type: m.type, quantity: m.quantity, reason: m.reason, reference: m.reference, created_at: new Date(m.created_at) }
-      })))
-    }
-    // Órdenes de compra
-    for (const o of purchaseOrders) {
-      await prisma.purchaseOrder.upsert({ where: { id: o.id }, update: {}, create: { id: o.id, supplier_id: o.supplier_id, status: o.status, notes: o.notes, created_at: new Date(o.created_at), updated_at: new Date(o.updated_at) } })
-    }
-    for (const l of purchaseOrderLines) {
-      await prisma.purchaseOrderLine.upsert({ where: { id: l.id }, update: {}, create: { id: l.id, order_id: l.order_id, part_id: l.part_id, quantity_ordered: l.quantity_ordered, quantity_received: l.quantity_received ?? 0, unit_price: l.unit_price } })
-    }
-    res.json({ ok: true, users: users.length, suppliers: suppliers.length, parts: parts.length, stockMovements: stockMovements.length })
-  } catch (e) {
-    res.status(500).json({ error: e.message })
-  }
-})
 
 // Auth routes — login y GET users son públicos, el resto usa el middleware global
 app.use('/api/auth', require('./routes/auth'))
