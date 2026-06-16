@@ -50,7 +50,7 @@ app.post('/api/admin/import-all', require('./middleware/auth'), async (req, res)
     }
     // Lots y LotLocations
     for (const l of lots) {
-      await prisma.lot.upsert({ where: { id: l.id }, update: {}, create: { id: l.id, part_id: l.part_id, lot_number: l.lot_number, quantity: l.quantity, expiry_date: l.expiry_date ? new Date(l.expiry_date) : null, created_at: new Date(l.created_at) } })
+      await prisma.lot.upsert({ where: { id: l.id }, update: {}, create: { id: l.id, part_id: l.part_id, lot_number: l.lot_number, purchase_order_id: l.purchase_order_id ?? null, created_at: new Date(l.created_at) } })
     }
     for (const l of lotLocations) {
       await prisma.lotLocation.upsert({ where: { id: l.id }, update: {}, create: { id: l.id, lot_id: l.lot_id, location: l.location, quantity: l.quantity } })
