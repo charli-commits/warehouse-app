@@ -19,8 +19,8 @@ RUN cd client && npm run build
 # Copiar el servidor
 COPY server/ ./server/
 
-# Generar Prisma client
-RUN cd server && npx prisma generate
+# Generar Prisma client con schema de producción (PostgreSQL)
+RUN cd server && cp prisma/schema.prod.prisma prisma/schema.prisma && npx prisma generate
 
 EXPOSE 3001
 
@@ -28,5 +28,5 @@ ENV NODE_ENV=production
 
 WORKDIR /app/server
 
-# Migrar BD y arrancar
-CMD ["sh", "-c", "npx prisma migrate deploy && node src/index.js"]
+# Usar schema prod, migrar BD y arrancar
+CMD ["sh", "-c", "cp prisma/schema.prod.prisma prisma/schema.prisma && npx prisma migrate deploy && node src/index.js"]
