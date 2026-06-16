@@ -33,7 +33,7 @@ app.post('/api/admin/migrate', require('./middleware/auth'), async (req, res) =>
   try {
     // Usuarios (skip Admin que ya existe)
     for (const u of users) {
-      await prisma.user.upsert({ where: { name: u.name }, update: {}, create: { name: u.name, pin: u.pin, role: u.role, active: u.active ?? true } })
+      await prisma.user.upsert({ where: { name: u.name }, update: {}, create: { name: u.name, pin: u.pin, role: u.role, active: u.active === 1 || u.active === true } })
     }
     // Proveedores
     for (const s of suppliers) {
