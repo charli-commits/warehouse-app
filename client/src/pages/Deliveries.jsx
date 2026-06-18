@@ -131,7 +131,9 @@ function DeliveryForm({ initial, onSave, onCancel }) {
         street: f2v(p.street),
         city: f2v(p.city),
         zip: f2v(p.zip),
-        country: Array.isArray(p.country_id) ? p.country_id[1] : (f2v(p.country_id) || 'España')
+        country: Array.isArray(p.country_id) ? p.country_id[1] : (f2v(p.country_id) || 'España'),
+        phone: f2v(p.phone),
+        mobile: f2v(p.mobile),
       } : null
     }))
   }
@@ -232,6 +234,18 @@ function DeliveryForm({ initial, onSave, onCancel }) {
                   <input type="text" value={addr.country || ''} onChange={e => updateAddr('country', e.target.value)}
                     className="w-full border border-gray-300 rounded px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
                 </div>
+                <div>
+                  <label className="block text-xs text-gray-500 mb-0.5">Teléfono</label>
+                  <input type="text" value={addr.phone || ''} onChange={e => updateAddr('phone', e.target.value)}
+                    placeholder="Ej: 612345678"
+                    className="w-full border border-gray-300 rounded px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-500 mb-0.5">Móvil <span className="text-gray-400">(requerido internacional)</span></label>
+                  <input type="text" value={addr.mobile || ''} onChange={e => updateAddr('mobile', e.target.value)}
+                    placeholder="Ej: +4917612345678"
+                    className="w-full border border-gray-300 rounded px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                </div>
                 <div className="col-span-2 flex justify-end">
                   <button type="button" onClick={() => setEditingAddr(false)}
                     className="text-xs text-gray-500 hover:text-gray-800 font-medium">Listo</button>
@@ -272,6 +286,12 @@ function DeliveryForm({ initial, onSave, onCancel }) {
               <label className="block text-xs text-gray-500 mb-0.5">Teléfono</label>
               <input type="text" value={addr?.phone || ''} onChange={e => updateAddr('phone', e.target.value)}
                 placeholder="Ej: 612345678"
+                className="w-full border border-gray-300 rounded px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+            </div>
+            <div>
+              <label className="block text-xs text-gray-500 mb-0.5">Móvil <span className="text-gray-400">(requerido internacional)</span></label>
+              <input type="text" value={addr?.mobile || ''} onChange={e => updateAddr('mobile', e.target.value)}
+                placeholder="Ej: +4917612345678"
                 className="w-full border border-gray-300 rounded px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
             </div>
             <div>
@@ -330,6 +350,7 @@ export default function Deliveries() {
   const [editing, setEditing] = useState(null)
   const [shippingId, setShippingId] = useState(null)
   const [shipCarrier, setShipCarrier] = useState('')
+  const [shipParcels, setShipParcels] = useState(1)
   const [editTrackingId, setEditTrackingId] = useState(null)
   const [editTrackingVal, setEditTrackingVal] = useState('')
   const [users, setUsers] = useState([])
@@ -371,8 +392,9 @@ export default function Deliveries() {
 
   async function handleShip(id, carrier) {
     try {
+      if (shipParcels > 1) await api.updateDelivery(id, { parcels: shipParcels })
       await api.shipDelivery(id, { carrier })
-      setShippingId(null); setShipCarrier('')
+      setShippingId(null); setShipCarrier(''); setShipParcels(1)
       load()
     }
     catch (err) { alert(err.message) }
@@ -402,22 +424,27 @@ export default function Deliveries() {
   const [showHistory, setShowHistory] = useState(false)
   const [activeTab, setActiveTab] = useState('ALL')
   const [search, setSearch] = useState('')
-  const [cierrando, setCierrando] = useState(false)
 
-  async function handleCierre() {
-    if (!confirm('¿Cerrar la jornada GLS? Esto comunicará a GLS el fin de las recogidas de hoy.')) return
-    setCierrando(true)
+  async function handleEtiquetasPdf() {
     try {
-      const res = await api.cierreJornada()
-      if (res.pdf_url) {
-        window.open(`${res.pdf_url}`, '_blank')
-      }
-      alert('Jornada cerrada correctamente.')
-    } catch (err) {
-      alert('Error al cerrar jornada: ' + err.message)
-    } finally {
-      setCierrando(false)
-    }
+      const token = JSON.parse(localStorage.getItem('wh_user') || '{}')?.token
+      const res = await fetch('/api/deliveries/etiquetas-pdf', { headers: { Authorization: `Bearer ${token}` } })
+      if (!res.ok) { const e = await res.json().catch(() => ({})); alert('Error al generar PDF: ' + (e.error || res.status)); return }
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      window.open(url, '_blank')
+    } catch (err) { alert('Error: ' + err.message) }
+  }
+
+  async function handleResumenCierre() {
+    try {
+      const token = JSON.parse(localStorage.getItem('wh_user') || '{}')?.token
+      const res = await fetch('/api/deliveries/resumen-cierre', { headers: { Authorization: `Bearer ${token}` } })
+      if (!res.ok) { alert('Error al generar resumen'); return }
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      window.open(url, '_blank')
+    } catch (err) { alert('Error: ' + err.message) }
   }
 
   const navigate = useNavigate()
@@ -473,7 +500,7 @@ export default function Deliveries() {
         </td>
         <td className="px-4 py-2.5 text-xs text-gray-600">
           {note.carrier
-            ? <div><span className="font-medium">{note.carrier}</span>{note.gls_tracking && <span className="ml-1 font-mono text-gray-400">{note.gls_tracking}</span>}</div>
+            ? <div><span className="font-medium">{note.carrier}</span>{note.gls_tracking && <a href={`https://gls-group.eu/ES/es/seguimiento-de-envios?match=${note.gls_tracking}`} target="_blank" rel="noreferrer" className="ml-1 font-mono text-blue-500 hover:underline">{note.gls_tracking}</a>}</div>
             : <span className="text-gray-300">—</span>}
         </td>
         <td className="px-4 py-2.5 text-xs text-gray-500">
@@ -481,12 +508,12 @@ export default function Deliveries() {
         </td>
         <td className="px-4 py-2.5 text-right" onClick={e => e.stopPropagation()}>
           <div className="flex items-center justify-end gap-3">
-            {!['PICKING','READY','SHIPPED','DELIVERED'].includes(note.status) && (
+            {!['PICKING','SHIPPED','DELIVERED'].includes(note.status) && (
               <button onClick={() => handleDelete(note.id, note.status !== 'DRAFT')}
                 className="text-gray-200 hover:text-red-400 transition-colors" title="Eliminar">🗑</button>
             )}
             <div className="flex items-center gap-1.5">
-              {note.status === 'DRAFT' && (<>
+              {(note.status === 'DRAFT' || note.status === 'READY') && (<>
                 <button onClick={() => { setEditing(note); setShowForm(true) }}
                   className="text-gray-400 hover:text-blue-600 text-xs font-medium">Editar</button>
                 {perm.deliveries.confirm && <button onClick={() => handleConfirm(note.id)}
@@ -505,12 +532,20 @@ export default function Deliveries() {
                   className="bg-purple-600 hover:bg-purple-700 text-white text-xs font-medium px-3 py-1.5 rounded-md">Marcar enviado</button>
               )}
               {note.status === 'READY' && perm.deliveries.ship && shippingId === note.id && (
-                <div className="flex gap-1.5 items-center">
-                  <button onClick={() => handleShip(note.id, 'GLS')}
-                    className="bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold px-3 py-1.5 rounded-md">GLS</button>
-                  <button onClick={() => handleShip(note.id, 'DACHSER')}
-                    className="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold px-3 py-1.5 rounded-md">DACHSER</button>
-                  <button onClick={() => setShippingId(null)} className="text-gray-400 text-xs">✕</button>
+                <div className="flex flex-col gap-1.5 items-end">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-xs text-gray-500">Bultos:</span>
+                    <input type="number" min="1" max="20" value={shipParcels}
+                      onChange={e => setShipParcels(Math.max(1, Number(e.target.value)))}
+                      className="w-12 border border-gray-300 rounded px-1.5 py-1 text-xs text-center" />
+                  </div>
+                  <div className="flex gap-1.5 items-center">
+                    <button onClick={() => handleShip(note.id, 'GLS')}
+                      className="bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold px-3 py-1.5 rounded-md">GLS</button>
+                    <button onClick={() => handleShip(note.id, 'DACHSER')}
+                      className="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold px-3 py-1.5 rounded-md">DACHSER</button>
+                    <button onClick={() => { setShippingId(null); setShipParcels(1) }} className="text-gray-400 text-xs">✕</button>
+                  </div>
                 </div>
               )}
               {note.status === 'SHIPPED' && perm.deliveries.deliver && (
@@ -531,20 +566,18 @@ export default function Deliveries() {
       <div className="flex items-center justify-between mb-3 md:mb-6">
         <h1 className="text-xl md:text-2xl font-bold text-gray-900">Albaranes</h1>
         <div className="flex items-center gap-2">
-          <a href={`/api/deliveries/etiquetas-pdf`}
-            target="_blank" rel="noreferrer"
+          <button onClick={handleEtiquetasPdf}
             className="hidden md:block border border-gray-300 hover:border-blue-400 hover:text-blue-600 text-gray-600 text-sm font-medium px-4 py-2 rounded-md">
             🖨 Imprimir etiquetas
-          </a>
-          <a href={`/api/deliveries/resumen-cierre`}
-            target="_blank" rel="noreferrer"
+          </button>
+          <button onClick={handleResumenCierre}
             className="hidden md:block border border-gray-300 hover:border-green-400 hover:text-green-600 text-gray-600 text-sm font-medium px-4 py-2 rounded-md">
             📄 Resumen envíos
-          </a>
-          <button onClick={handleCierre} disabled={cierrando}
-            className="hidden md:block border border-gray-300 hover:border-orange-400 hover:text-orange-600 text-gray-600 text-sm font-medium px-4 py-2 rounded-md disabled:opacity-50">
-            {cierrando ? 'Cerrando...' : '🚚 Cerrar jornada GLS'}
           </button>
+          <a href="https://gls-group.eu/ES/es/extranet" target="_blank" rel="noreferrer"
+            className="hidden md:block border border-gray-300 hover:border-orange-400 hover:text-orange-600 text-gray-600 text-sm font-medium px-4 py-2 rounded-md">
+            🚚 Cerrar jornada GLS
+          </a>
           <button onClick={() => { setEditing(null); setShowForm(true) }}
             className="bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-3 py-2 md:px-4 rounded-md">
             + Nuevo
@@ -554,20 +587,18 @@ export default function Deliveries() {
 
       {/* Mobile: fila de acciones GLS */}
       <div className="flex gap-2 mb-3 md:hidden">
-        <a href={`/api/deliveries/etiquetas-pdf`}
-          target="_blank" rel="noreferrer"
+        <button onClick={handleEtiquetasPdf}
           className="flex-1 text-center border border-gray-300 text-gray-600 text-sm font-medium px-3 py-2 rounded-md active:bg-gray-50">
           🖨 Etiquetas
-        </a>
-        <a href={`/api/deliveries/resumen-cierre`}
-          target="_blank" rel="noreferrer"
+        </button>
+        <button onClick={handleResumenCierre}
           className="flex-1 text-center border border-gray-300 text-gray-600 text-sm font-medium px-3 py-2 rounded-md active:bg-gray-50">
           📄 Resumen
-        </a>
-        <button onClick={handleCierre} disabled={cierrando}
-          className="flex-1 border border-gray-300 text-gray-600 text-sm font-medium px-3 py-2 rounded-md disabled:opacity-50 active:bg-gray-50">
-          {cierrando ? 'Cerrando...' : '🚚 Cerrar jornada'}
         </button>
+        <a href="https://gls-group.eu/ES/es/extranet" target="_blank" rel="noreferrer"
+          className="flex-1 text-center border border-gray-300 text-gray-600 text-sm font-medium px-3 py-2 rounded-md active:bg-gray-50">
+          🚚 Cerrar jornada
+        </a>
       </div>
 
       {/* Search + filters */}
@@ -677,7 +708,7 @@ export default function Deliveries() {
                 <div className="text-xs text-gray-400">
                   {note.lines.length} pieza{note.lines.length !== 1 ? 's' : ''}
                   {note.carrier && <span className="ml-2 font-medium text-gray-600">{note.carrier}</span>}
-                  {note.gls_tracking && <span className="ml-1 font-mono text-gray-400 text-[11px]">{note.gls_tracking}</span>}
+                  {note.gls_tracking && <a href={`https://gls-group.eu/ES/es/seguimiento-de-envios?match=${note.gls_tracking}`} target="_blank" rel="noreferrer" className="ml-1 font-mono text-blue-400 text-[11px] hover:underline">{note.gls_tracking}</a>}
                 </div>
                 <div onClick={e => e.stopPropagation()}>
                   {note.status === 'DRAFT' && perm.deliveries.confirm && (
@@ -705,12 +736,20 @@ export default function Deliveries() {
                     </button>
                   )}
                   {note.status === 'READY' && perm.deliveries.ship && shippingId === note.id && (
-                    <div className="flex gap-1.5">
-                      <button onClick={() => handleShip(note.id, 'GLS')}
-                        className="bg-purple-600 text-white text-xs font-bold px-2.5 py-1.5 rounded-md">GLS</button>
-                      <button onClick={() => handleShip(note.id, 'DACHSER')}
-                        className="bg-indigo-600 text-white text-xs font-bold px-2.5 py-1.5 rounded-md">DACHSER</button>
-                      <button onClick={() => setShippingId(null)} className="text-gray-400 text-xs px-1">✕</button>
+                    <div className="flex flex-col gap-1.5 items-end">
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-xs text-gray-500">Bultos:</span>
+                        <input type="number" min="1" max="20" value={shipParcels}
+                          onChange={e => setShipParcels(Math.max(1, Number(e.target.value)))}
+                          className="w-12 border border-gray-300 rounded px-1.5 py-1 text-xs text-center" />
+                      </div>
+                      <div className="flex gap-1.5">
+                        <button onClick={() => handleShip(note.id, 'GLS')}
+                          className="bg-purple-600 text-white text-xs font-bold px-2.5 py-1.5 rounded-md">GLS</button>
+                        <button onClick={() => handleShip(note.id, 'DACHSER')}
+                          className="bg-indigo-600 text-white text-xs font-bold px-2.5 py-1.5 rounded-md">DACHSER</button>
+                        <button onClick={() => { setShippingId(null); setShipParcels(1) }} className="text-gray-400 text-xs px-1">✕</button>
+                      </div>
                     </div>
                   )}
                   {note.status === 'SHIPPED' && perm.deliveries.deliver && (
@@ -768,7 +807,7 @@ export default function Deliveries() {
                     {n.carrier
                       ? <div className="text-sm font-medium text-gray-700">🚚 {n.carrier}</div>
                       : <p className="text-sm text-gray-400">Sin transportista asignado</p>}
-                    {n.gls_tracking && <div className="font-mono text-sm text-gray-600">{n.gls_tracking}</div>}
+                    {n.gls_tracking && <a href={`https://gls-group.eu/ES/es/seguimiento-de-envios?match=${n.gls_tracking}`} target="_blank" rel="noreferrer" className="font-mono text-sm text-blue-600 hover:underline">{n.gls_tracking}</a>}
                     {n.gls_label_url && (
                       <a href={`${n.gls_label_url}`} target="_blank" rel="noreferrer"
                         className="inline-flex items-center gap-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 text-xs font-medium px-3 py-1.5 rounded-md">

@@ -1,10 +1,9 @@
 generator client {
-  provider      = "prisma-client-js"
-  binaryTargets = ["native", "linux-musl-openssl-3.0.x"]
+  provider = "prisma-client-js"
 }
 
 datasource db {
-  provider = "postgresql"
+  provider = "sqlite"
   url      = env("DATABASE_URL")
 }
 
@@ -137,7 +136,8 @@ model DeliveryNote {
   notes             String?
   client_ref        String?  // nº pedido Odoo u otra referencia editable
   carrier           String?  // empresa de transporte: GLS, DACHSER...
-  gls_tracking      String?  // tracking number
+  parcels           Int      @default(1)
+  gls_tracking      String?  // tracking number (comma-separated when multi-bulto)
   gls_label_url     String?
   created_by_id     Int?
   created_at        DateTime @default(now())

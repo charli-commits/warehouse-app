@@ -10,9 +10,64 @@ const PDFKit = require('pdfkit')
 const LABELS_DIR = path.join(__dirname, '..', '..', 'uploads', 'gls_labels')
 fs.mkdirSync(LABELS_DIR, { recursive: true })
 
+// Map Spanish/Odoo country names → ISO 2-letter codes
+const COUNTRY_NAME_TO_ISO = {
+  'españa': 'ES', 'spain': 'ES',
+  'alemania': 'DE', 'germany': 'DE', 'deutschland': 'DE',
+  'francia': 'FR', 'france': 'FR',
+  'italia': 'IT', 'italy': 'IT',
+  'portugal': 'PT',
+  'países bajos': 'NL', 'holanda': 'NL', 'netherlands': 'NL',
+  'bélgica': 'BE', 'belgica': 'BE', 'belgium': 'BE',
+  'reino unido': 'GB', 'united kingdom': 'GB', 'gran bretaña': 'GB',
+  'suiza': 'CH', 'switzerland': 'CH',
+  'austria': 'AT',
+  'polonia': 'PL', 'poland': 'PL',
+  'suecia': 'SE', 'sweden': 'SE',
+  'noruega': 'NO', 'norway': 'NO',
+  'dinamarca': 'DK', 'denmark': 'DK',
+  'finlandia': 'FI', 'finland': 'FI',
+  'república checa': 'CZ', 'republica checa': 'CZ', 'czech republic': 'CZ',
+  'hungría': 'HU', 'hungria': 'HU', 'hungary': 'HU',
+  'rumanía': 'RO', 'rumania': 'RO', 'romania': 'RO',
+  'bulgaria': 'BG',
+  'croacia': 'HR', 'croatia': 'HR',
+  'eslovaquia': 'SK', 'slovakia': 'SK',
+  'eslovenia': 'SI', 'slovenia': 'SI',
+  'grecia': 'GR', 'greece': 'GR',
+  'irlanda': 'IE', 'ireland': 'IE',
+  'luxemburgo': 'LU', 'luxembourg': 'LU',
+  'lituania': 'LT', 'lithuania': 'LT',
+  'letonia': 'LV', 'latvia': 'LV',
+  'estonia': 'EE', 'estonia': 'EE',
+  'chipre': 'CY', 'cyprus': 'CY',
+  'malta': 'MT',
+  'marruecos': 'MA', 'morocco': 'MA',
+  'estados unidos': 'US', 'united states': 'US', 'usa': 'US',
+}
+
+function resolveCountryIso(countryName) {
+  if (!countryName) return 'ES'
+  if (countryName.length === 2) return countryName.toUpperCase()
+  return COUNTRY_NAME_TO_ISO[countryName.toLowerCase().trim()] || 'ES'
+}
+
 async function logEvent(delivery_note_id, status, user_name = null, tx = prisma) {
   return tx.deliveryNoteEvent.create({ data: { delivery_note_id, status, user_name } })
 }
+
+// TEMP: reset all PostgreSQL sequences (run once then remove)
+router.get('/fix-sequences', async (req, res) => {
+  const tables = ['StockMovement','DeliveryNote','DeliveryNoteLine','DeliveryNoteEvent','PickingLine','Part','PartLocation','Supplier','PurchaseOrder','PurchaseOrderLine','PurchaseReceiptLine','User','Lot','LotLocation','Audit','AuditLine','Disassembly','DisassemblyLine','OdooCache']
+  const results = {}
+  for (const t of tables) {
+    try {
+      await prisma.$executeRawUnsafe(`SELECT setval('"${t}_id_seq"', COALESCE((SELECT MAX(id) FROM "${t}"), 1))`)
+      results[t] = 'OK'
+    } catch(e) { results[t] = e.message.split('\n')[0] }
+  }
+  res.json(results)
+})
 
 // GET /api/deliveries
 router.get('/', async (req, res) => {
@@ -44,6 +99,37 @@ router.get('/resumen-cierre', async (req, res) => {
     res.setHeader('Content-Type', 'application/pdf')
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`)
     res.send(pdfBuf)
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// GET /api/deliveries/etiquetas-pdf — merged PDF of all labels for READY/SHIPPED notes
+router.get('/etiquetas-pdf', async (req, res) => {
+  try {
+    const notes = await prisma.deliveryNote.findMany({
+      where: { status: { in: ['READY', 'SHIPPED'] }, gls_label_url: { not: null } }
+    })
+
+    const pdfsToMerge = notes
+      .map(n => path.join(__dirname, '..', '..', n.gls_label_url))
+      .filter(f => fs.existsSync(f))
+
+    if (pdfsToMerge.length === 0)
+      return res.status(404).json({ error: 'No hay etiquetas disponibles para fusionar' })
+
+    const merged = await PDFDocument.create()
+    for (const file of pdfsToMerge) {
+      const bytes = fs.readFileSync(file)
+      const doc = await PDFDocument.load(bytes)
+      const pages = await merged.copyPages(doc, doc.getPageIndices())
+      pages.forEach(p => merged.addPage(p))
+    }
+
+    const mergedBytes = await merged.save()
+    res.setHeader('Content-Type', 'application/pdf')
+    res.setHeader('Content-Disposition', `attachment; filename="etiquetas-${new Date().toISOString().slice(0,10)}.pdf"`)
+    res.send(Buffer.from(mergedBytes))
   } catch (err) {
     res.status(500).json({ error: err.message })
   }
@@ -95,13 +181,14 @@ router.post('/', async (req, res) => {
 router.put('/:id', async (req, res) => {
   const id = Number(req.params.id)
   try {
-    const { odoo_partner_id, odoo_partner_name, shipping_address, notes, client_ref, lines } = req.body
+    const { odoo_partner_id, odoo_partner_name, shipping_address, notes, client_ref, parcels, lines } = req.body
     const updateData = {
       ...(odoo_partner_id !== undefined && { odoo_partner_id: odoo_partner_id ? Number(odoo_partner_id) : null }),
       ...(odoo_partner_name !== undefined && { odoo_partner_name }),
       ...(shipping_address !== undefined && { shipping_address: shipping_address ? JSON.stringify(shipping_address) : null }),
       ...(notes !== undefined && { notes }),
       ...(client_ref !== undefined && { client_ref: client_ref || null }),
+      ...(parcels !== undefined && { parcels: Math.max(1, Number(parcels)) }),
     }
 
     if (lines) {
@@ -326,12 +413,15 @@ router.post('/:id/ship', async (req, res) => {
       const addr = note.shipping_address ? JSON.parse(note.shipping_address) : {}
       const result = await glsClient.createShipment({
         ref: note.client_ref || `ALB-${note.id}`,
+        parcels: note.parcels || 1,
         recipient: {
           name: note.odoo_partner_name || 'Cliente',
           address: addr.street || '',
           zip: addr.zip || '',
           city: addr.city || '',
-          country: 'ES',
+          country: resolveCountryIso(addr.country),
+          phone: addr.phone || '',
+          mobile: addr.mobile || addr.phone || '',
         }
       })
       gls_tracking = result.tracking
@@ -509,37 +599,6 @@ function buildResumenPDF(notes) {
   })
 }
 
-
-// GET /api/deliveries/etiquetas-pdf — merged PDF of all labels for SHIPPED notes today
-router.get('/etiquetas-pdf', async (req, res) => {
-  try {
-    const notes = await prisma.deliveryNote.findMany({
-      where: { status: { in: ['READY', 'SHIPPED'] }, gls_label_url: { not: null } }
-    })
-
-    const pdfsToMerge = notes
-      .map(n => path.join(__dirname, '..', '..', n.gls_label_url))
-      .filter(f => fs.existsSync(f))
-
-    if (pdfsToMerge.length === 0)
-      return res.status(404).json({ error: 'No hay etiquetas disponibles para fusionar' })
-
-    const merged = await PDFDocument.create()
-    for (const file of pdfsToMerge) {
-      const bytes = fs.readFileSync(file)
-      const doc = await PDFDocument.load(bytes)
-      const pages = await merged.copyPages(doc, doc.getPageIndices())
-      pages.forEach(p => merged.addPage(p))
-    }
-
-    const mergedBytes = await merged.save()
-    res.setHeader('Content-Type', 'application/pdf')
-    res.setHeader('Content-Disposition', `attachment; filename="etiquetas-${new Date().toISOString().slice(0,10)}.pdf"`)
-    res.send(Buffer.from(mergedBytes))
-  } catch (err) {
-    res.status(500).json({ error: err.message })
-  }
-})
 
 // POST /api/deliveries/cierre-jornada — cierre del día GLS
 router.post('/cierre-jornada', async (req, res) => {
