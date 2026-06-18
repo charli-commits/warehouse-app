@@ -1,16 +1,16 @@
 FROM node:20-alpine
 
-RUN apk add --no-cache openssl
+RUN apk add --no-cache openssl python3 make g++
 
 WORKDIR /app
 
-# Instalar dependencias del servidor
+# Dependencias del servidor
 COPY server/package*.json ./server/
-RUN cd server && npm install --production=false
+RUN cd server && npm ci --omit=dev --ignore-scripts && npm install --save-dev prisma
 
-# Instalar dependencias del cliente
+# Dependencias del cliente (solo devDeps necesarias para build)
 COPY client/package*.json ./client/
-RUN cd client && npm install --production=false
+RUN cd client && npm ci
 
 # Compilar el cliente
 COPY client/ ./client/
@@ -28,5 +28,4 @@ ENV NODE_ENV=production
 
 WORKDIR /app/server
 
-# Usar schema prod, migrar BD y arrancar
 CMD ["sh", "-c", "cp prisma/schema.prod.prisma prisma/schema.prisma && npx prisma migrate deploy && node src/index.js"]
