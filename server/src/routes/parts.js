@@ -3,19 +3,16 @@ const router = express.Router()
 const prisma = require('../lib/prisma')
 const multer = require('multer')
 const path = require('path')
-const fs = require('fs')
+const { createClient } = require('@supabase/supabase-js')
 
-const PARTS_IMG_DIR = path.join(__dirname, '..', '..', 'uploads', 'parts')
-fs.mkdirSync(PARTS_IMG_DIR, { recursive: true })
+const supabase = createClient(
+  process.env.SUPABASE_URL || 'https://wtpaggzdwhpxxtatcpxo.supabase.co',
+  process.env.SUPABASE_SERVICE_KEY || ''
+)
 
+// Use memory storage so we can upload buffer directly to Supabase
 const upload = multer({
-  storage: multer.diskStorage({
-    destination: PARTS_IMG_DIR,
-    filename: (req, file, cb) => {
-      const ext = path.extname(file.originalname).toLowerCase() || '.jpg'
-      cb(null, `${req.params.id}${ext}`)
-    }
-  }),
+  storage: multer.memoryStorage(),
   limits: { fileSize: 10 * 1024 * 1024 },
   fileFilter: (req, file, cb) => cb(null, /image\//.test(file.mimetype))
 })
@@ -187,13 +184,23 @@ router.get('/locations/all', async (req, res) => {
   res.json(rows.map(r => r.location))
 })
 
-// POST /api/parts/:id/image — subir/reemplazar foto
+// POST /api/parts/:id/image — subir/reemplazar foto a Supabase
 router.post('/:id/image', upload.single('image'), async (req, res) => {
   const id = Number(req.params.id)
   if (!req.file) return res.status(400).json({ error: 'No se recibió ninguna imagen' })
+
   const ext = path.extname(req.file.originalname).toLowerCase() || '.jpg'
-  const image_url = `/uploads/parts/${id}${ext}`
-  const part = await prisma.part.update({ where: { id }, data: { image_url } })
+  const filename = `manual/${id}_${Date.now()}${ext}`
+
+  const { error: uploadError } = await supabase.storage
+    .from('parts')
+    .upload(filename, req.file.buffer, { contentType: req.file.mimetype, upsert: true })
+
+  if (uploadError) return res.status(500).json({ error: uploadError.message })
+
+  const { data: { publicUrl } } = supabase.storage.from('parts').getPublicUrl(filename)
+
+  const part = await prisma.part.update({ where: { id }, data: { image_url: publicUrl } })
   res.json({ image_url: part.image_url })
 })
 
