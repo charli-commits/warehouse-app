@@ -150,7 +150,7 @@ export default function PartDetail() {
       const uploadRes = await fetch(signData.signedURL, {
         method: 'PUT',
         headers: { 'Content-Type': 'image/jpeg' },
-        body: compressed,
+        body: await compressed.arrayBuffer(),
       })
       if (!uploadRes.ok) throw new Error('Error subiendo imagen a Supabase')
 
