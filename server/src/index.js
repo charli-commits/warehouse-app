@@ -28,40 +28,6 @@ app.get('/api/health', (req, res) => res.json({ ok: true }))
 // Auth routes — login y GET users son públicos, el resto usa el middleware global
 app.use('/api/auth', require('./routes/auth'))
 
-// TEMP: stock import endpoint
-const { PrismaClient } = require('@prisma/client')
-const _prismaImport = new PrismaClient()
-app.post('/api/import-stock', async (req, res) => {
-  if (req.headers['x-import-secret'] !== 'wh-import-2026') return res.status(403).json({ error: 'forbidden' })
-  const parts = req.body
-  if (!Array.isArray(parts)) return res.status(400).json({ error: 'expected array' })
-  try {
-    await _prismaImport.auditLine.deleteMany()
-    await _prismaImport.disassemblyLine.deleteMany()
-    await _prismaImport.lotLocation.deleteMany()
-    await _prismaImport.lot.deleteMany()
-    await _prismaImport.purchaseReceiptLine.deleteMany()
-    await _prismaImport.pickingLine.deleteMany()
-    await _prismaImport.deliveryNoteLine.deleteMany()
-    await _prismaImport.purchaseOrderLine.deleteMany()
-    await _prismaImport.stockMovement.deleteMany()
-    await _prismaImport.partLocation.deleteMany()
-    await _prismaImport.part.deleteMany()
-    let inserted = 0
-    for (const d of parts) {
-      const part = await _prismaImport.part.create({
-        data: { code: d.code, name: d.name, category: d.category, image_url: d.image_url, stock_current: d.stock_current, stock_min: 0, unit: 'ud' }
-      })
-      for (const [loc, qty] of Object.entries(d.locations || {})) {
-        await _prismaImport.partLocation.create({ data: { part_id: part.id, location: loc, stock: qty } })
-      }
-      inserted++
-    }
-    await _prismaImport.$executeRawUnsafe(`SELECT setval('"Part_id_seq"', (SELECT MAX(id) FROM "Part"))`)
-    await _prismaImport.$executeRawUnsafe(`SELECT setval('"PartLocation_id_seq"', (SELECT MAX(id) FROM "PartLocation"))`)
-    res.json({ ok: true, inserted })
-  } catch (e) { res.status(500).json({ error: e.message }) }
-})
 
 // Middleware JWT para todas las demás rutas /api/*
 app.use('/api', (req, res, next) => {
