@@ -8,7 +8,15 @@ const requireAuth = require('./middleware/auth')
 const app = express()
 
 // Security headers
-app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }))
+app.use(helmet({
+  crossOriginResourcePolicy: { policy: 'cross-origin' },
+  contentSecurityPolicy: {
+    directives: {
+      ...helmet.contentSecurityPolicy.getDefaultDirectives(),
+      'img-src': ["'self'", 'data:', 'https://wtpaggzdwhpxxtatcpxo.supabase.co'],
+    },
+  },
+}))
 
 // CORS — app interna, permitir orígenes localhost/LAN y peticiones sin origin
 app.use(cors({
