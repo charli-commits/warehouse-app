@@ -152,7 +152,7 @@ function postSoap(xmlBody, soapAction) {
   })
 }
 
-// Step 1: create shipment → returns array of codbarras (one per bulto)
+// Step 1: create shipment → returns array of { codbarras, codexp }
 async function grabaServicios(recipient, ref, parcels = 1) {
   const innerXml = buildShipmentXml({ recipient, ref, parcels })
   const envelope = soapEnvelope('GrabaServicios', innerXml)
@@ -166,14 +166,13 @@ async function grabaServicios(recipient, ref, parcels = 1) {
     throw new Error(`GLS: ${msg}`)
   }
 
-  // GLS returns codbarras (61884...) in the XML; the customer-facing 43... tracking number
-  // is only printed on the label PDF, not returned in the API response
-  const allCods = [...raw.matchAll(/codbarras="([^"]+)"/gi)].map(m => m[1]).filter(Boolean)
-  if (allCods.length === 0) {
+  // codbarras (618...) = internal barcode used for PDF; codexp (10 digits) = public tracking number
+  const envios = [...raw.matchAll(/codbarras="([^"]+)"[^>]*codexp="([^"]+)"/gi)].map(m => ({ codbarras: m[1], codexp: m[2] }))
+  if (envios.length === 0) {
     const msg = errors.length ? errors.join(' | ') : 'respuesta inesperada del servidor GLS'
     throw new Error(`GLS: ${msg}`)
   }
-  return allCods
+  return envios
 }
 
 // Step 2: fetch label PDF for a given codbarras → returns Buffer
@@ -209,14 +208,14 @@ async function createShipment({ recipient, ref, parcels = 1 }) {
   if (!recipient.address)
     throw new Error('Falta la dirección del destinatario.')
 
-  const trackings = await grabaServicios(recipient, ref, parcels)
+  const envios = await grabaServicios(recipient, ref, parcels)
   const labelBuffers = []
-  for (const cod of trackings) {
+  for (const { codbarras } of envios) {
     try {
-      const buf = await etiquetaEnvio(cod)
+      const buf = await etiquetaEnvio(codbarras)
       labelBuffers.push(buf)
     } catch (e) {
-      console.warn('[GLS] etiqueta no disponible para', cod, ':', e.message)
+      console.warn('[GLS] etiqueta no disponible para', codbarras, ':', e.message)
     }
   }
 
@@ -236,7 +235,7 @@ async function createShipment({ recipient, ref, parcels = 1 }) {
     }
   }
 
-  return { tracking: trackings.join(','), labelPdfBuffer }
+  return { tracking: envios.map(e => e.codexp).join(','), labelPdfBuffer }
 }
 
 // Cierre de jornada — llama a CierreAgencia para comunicar fin de recogidas del día

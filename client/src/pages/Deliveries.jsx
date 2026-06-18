@@ -513,7 +513,7 @@ export default function Deliveries() {
         </td>
         <td className="px-4 py-2.5 text-xs text-gray-600">
           {note.carrier
-            ? <div><span className="font-medium">{note.carrier}</span>{note.gls_tracking && <a href={`https://gls-group.eu/ES/es/seguimiento-de-envios?match=${note.gls_tracking}`} target="_blank" rel="noreferrer" className="ml-1 font-mono text-blue-500 hover:underline">{note.gls_tracking}</a>}</div>
+            ? <div><span className="font-medium">{note.carrier}</span>{note.gls_tracking && <span className="ml-1 inline-flex items-center gap-1"><span className="font-mono text-blue-500 select-all cursor-text">{note.gls_tracking}</span><a href="https://gls-group.eu/ES/es/home/" target="_blank" rel="noreferrer" title="Abrir seguimiento GLS" className="text-blue-400 hover:text-blue-600">🔗</a></span>}</div>
             : <span className="text-gray-300">—</span>}
         </td>
         <td className="px-4 py-2.5 text-xs text-gray-500">
@@ -721,7 +721,7 @@ export default function Deliveries() {
                 <div className="text-xs text-gray-400">
                   {note.lines.length} pieza{note.lines.length !== 1 ? 's' : ''}
                   {note.carrier && <span className="ml-2 font-medium text-gray-600">{note.carrier}</span>}
-                  {note.gls_tracking && <a href={`https://gls-group.eu/ES/es/seguimiento-de-envios?match=${note.gls_tracking}`} target="_blank" rel="noreferrer" className="ml-1 font-mono text-blue-400 text-[11px] hover:underline">{note.gls_tracking}</a>}
+                  {note.gls_tracking && <span className="ml-1 inline-flex items-center gap-1"><span className="font-mono text-blue-400 text-[11px] select-all cursor-text">{note.gls_tracking}</span><a href="https://gls-group.eu/ES/es/home/" target="_blank" rel="noreferrer" title="Abrir seguimiento GLS" className="text-blue-400 hover:text-blue-600 text-[11px]">🔗</a></span>}
                 </div>
                 <div onClick={e => e.stopPropagation()}>
                   {note.status === 'DRAFT' && perm.deliveries.confirm && (
@@ -820,7 +820,7 @@ export default function Deliveries() {
                     {n.carrier
                       ? <div className="text-sm font-medium text-gray-700">🚚 {n.carrier}</div>
                       : <p className="text-sm text-gray-400">Sin transportista asignado</p>}
-                    {n.gls_tracking && <a href={`https://gls-group.eu/ES/es/seguimiento-de-envios?match=${n.gls_tracking}`} target="_blank" rel="noreferrer" className="font-mono text-sm text-blue-600 hover:underline">{n.gls_tracking}</a>}
+                    {n.gls_tracking && <span className="inline-flex items-center gap-1"><span className="font-mono text-sm text-blue-600 select-all cursor-text">{n.gls_tracking}</span><a href="https://gls-group.eu/ES/es/home/" target="_blank" rel="noreferrer" title="Abrir seguimiento GLS" className="text-blue-400 hover:text-blue-600">🔗</a></span>}
                     {n.gls_label_url && (
                       <a href={`${n.gls_label_url}`} target="_blank" rel="noreferrer"
                         className="inline-flex items-center gap-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 text-xs font-medium px-3 py-1.5 rounded-md">
