@@ -3,33 +3,24 @@ const router = express.Router()
 const prisma = require('../lib/prisma')
 const multer = require('multer')
 const path = require('path')
-const https = require('https')
 
 const SUPABASE_URL = process.env.SUPABASE_URL || 'https://wtpaggzdwhpxxtatcpxo.supabase.co'
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Ind0cGFnZ3pkd2hweHh0YXRjcHhvIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4MTc2MDk3MiwiZXhwIjoyMDk3MzM2OTcyfQ.jvDVqVmz859pCv1im01PEJ9XHAd9FlJvQgAlO7uvd74'
 
-function supabaseUpload(filename, buffer, mimetype) {
-  return new Promise((resolve, reject) => {
-    const url = new URL(`${SUPABASE_URL}/storage/v1/object/parts/${filename}`)
-    const req = https.request({
-      hostname: url.hostname,
-      path: url.pathname,
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${SUPABASE_KEY}`,
-        'Content-Type': mimetype,
-        'Content-Length': buffer.length,
-        'x-upsert': 'true',
-      },
-    }, res => {
-      let data = ''
-      res.on('data', c => data += c)
-      res.on('end', () => res.statusCode < 300 ? resolve() : reject(new Error(`Supabase upload error ${res.statusCode}: ${data}`)))
-    })
-    req.on('error', reject)
-    req.write(buffer)
-    req.end()
+async function supabaseUpload(filename, buffer, mimetype) {
+  const res = await fetch(`${SUPABASE_URL}/storage/v1/object/parts/${filename}`, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${SUPABASE_KEY}`,
+      'Content-Type': mimetype,
+      'x-upsert': 'true',
+    },
+    body: buffer,
   })
+  if (!res.ok) {
+    const text = await res.text()
+    throw new Error(`Supabase upload error ${res.status}: ${text}`)
+  }
 }
 
 const upload = multer({
