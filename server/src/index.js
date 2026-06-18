@@ -37,8 +37,16 @@ app.post('/api/import-stock', async (req, res) => {
   const parts = req.body
   if (!Array.isArray(parts)) return res.status(400).json({ error: 'expected array' })
   try {
-    await _prismaImport.partLocation.deleteMany()
+    await _prismaImport.auditLine.deleteMany()
+    await _prismaImport.disassemblyLine.deleteMany()
+    await _prismaImport.lotLocation.deleteMany()
+    await _prismaImport.lot.deleteMany()
+    await _prismaImport.purchaseReceiptLine.deleteMany()
+    await _prismaImport.pickingLine.deleteMany()
+    await _prismaImport.deliveryNoteLine.deleteMany()
+    await _prismaImport.purchaseOrderLine.deleteMany()
     await _prismaImport.stockMovement.deleteMany()
+    await _prismaImport.partLocation.deleteMany()
     await _prismaImport.part.deleteMany()
     let inserted = 0
     for (const d of parts) {
