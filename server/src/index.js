@@ -31,7 +31,6 @@ app.use('/api/auth', require('./routes/auth'))
 // Middleware JWT para todas las demás rutas /api/*
 app.use('/api', (req, res, next) => {
   if (req.path.startsWith('/auth/')) return next()
-  if (req.path === '/deliveries/fix-sequences') return next() // TEMP
   return requireAuth(req, res, next)
 })
 

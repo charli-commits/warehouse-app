@@ -56,19 +56,6 @@ async function logEvent(delivery_note_id, status, user_name = null, tx = prisma)
   return tx.deliveryNoteEvent.create({ data: { delivery_note_id, status, user_name } })
 }
 
-// TEMP: reset all PostgreSQL sequences (run once then remove)
-router.get('/fix-sequences', async (req, res) => {
-  const tables = ['StockMovement','DeliveryNote','DeliveryNoteLine','DeliveryNoteEvent','PickingLine','Part','PartLocation','Supplier','PurchaseOrder','PurchaseOrderLine','PurchaseReceiptLine','User','Lot','LotLocation','Audit','AuditLine','Disassembly','DisassemblyLine','OdooCache']
-  const results = {}
-  for (const t of tables) {
-    try {
-      await prisma.$executeRawUnsafe(`SELECT setval('"${t}_id_seq"', COALESCE((SELECT MAX(id) FROM "${t}"), 1))`)
-      results[t] = 'OK'
-    } catch(e) { results[t] = e.message.split('\n')[0] }
-  }
-  res.json(results)
-})
-
 // GET /api/deliveries
 router.get('/', async (req, res) => {
   const where = {}
