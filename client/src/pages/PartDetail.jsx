@@ -101,13 +101,34 @@ export default function PartDetail() {
     }
   }
 
+  function compressImage(file, maxPx = 1200, quality = 0.82) {
+    return new Promise((resolve) => {
+      const img = new Image()
+      const url = URL.createObjectURL(file)
+      img.onload = () => {
+        URL.revokeObjectURL(url)
+        let { width, height } = img
+        if (width > maxPx || height > maxPx) {
+          if (width > height) { height = Math.round(height * maxPx / width); width = maxPx }
+          else { width = Math.round(width * maxPx / height); height = maxPx }
+        }
+        const canvas = document.createElement('canvas')
+        canvas.width = width; canvas.height = height
+        canvas.getContext('2d').drawImage(img, 0, 0, width, height)
+        canvas.toBlob(resolve, 'image/jpeg', quality)
+      }
+      img.src = url
+    })
+  }
+
   async function handleImageUpload(e) {
     const file = e.target.files?.[0]
     if (!file) return
     setUploadingImg(true)
     try {
+      const compressed = await compressImage(file)
       const fd = new FormData()
-      fd.append('image', file)
+      fd.append('image', compressed, 'photo.jpg')
       const token = JSON.parse(localStorage.getItem('wh_user') || '{}')?.token
       const res = await fetch(`/api/parts/${id}/image`, {
         method: 'POST',
