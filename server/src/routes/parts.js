@@ -89,7 +89,7 @@ router.get('/', async (req, res) => {
 
   if (low_stock === 'true') {
     // stock_current <= stock_min can't be compared in SQL via Prisma/SQLite — filter in memory
-    const all = await prisma.part.findMany({ where, include, orderBy: { name: 'asc' } })
+    const all = await prisma.part.findMany({ where, include, orderBy: { code: 'asc' } })
     const filtered = all.filter(p => p.stock_current <= p.stock_min)
     const total = filtered.length
     const start = (page - 1) * pageSize
@@ -97,7 +97,7 @@ router.get('/', async (req, res) => {
   }
 
   const [data, total, incomingAgg] = await Promise.all([
-    prisma.part.findMany({ where, include, orderBy: { name: 'asc' }, skip: (page - 1) * pageSize, take: pageSize }),
+    prisma.part.findMany({ where, include, orderBy: { code: 'asc' }, skip: (page - 1) * pageSize, take: pageSize }),
     prisma.part.count({ where }),
     prisma.purchaseOrderLine.groupBy({
       by: ['part_id'],
