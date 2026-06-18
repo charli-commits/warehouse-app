@@ -51,10 +51,25 @@ function soapEnvelope(action, innerXml) {
 </soap:Envelope>`
 }
 
-function buildShipmentXml({ recipient, ref, fecha }) {
+// ISO → GLS country code (phone prefix, from ES-GLS-Maestros_V2.xlsx "Paises" sheet)
+const GLS_COUNTRY_CODES = {
+  ES:34, PT:351, US:1, RU:7, CA:11, EG:20, GR:30, NL:31, BE:32, FR:33,
+  HU:36, IT:39, RO:40, LI:41, CZ:42, AT:43, GB:44, DK:45, SE:46, NO:47,
+  PL:48, DE:49, CH:411, SK:421, LU:352, IE:353, IS:354, FI:358, BG:359,
+  EE:360, HR:385, SI:386, BA:387, MK:389, SM:391, LT:77, LV:78, UA:380,
+  MC:331, MA:212, DZ:213, TN:216, TR:90, IL:972, SA:966, JP:81, KR:82,
+  CN:86, AU:61, NZ:64, IN:91, BR:55, AR:54, MX:52, CL:56, CO:57, PE:51,
+  CY:301, MT:443, GI:441,
+}
+
+function glsCountryCode(iso) {
+  return GLS_COUNTRY_CODES[(iso || 'ES').toUpperCase()] ?? 34
+}
+
+function buildShipmentXml({ recipient, ref, fecha, parcels = 1 }) {
   const dateStr = fecha || new Date().toLocaleDateString('es-ES', { day:'2-digit', month:'2-digit', year:'numeric' })
   const isInternational = recipient.country && recipient.country.toUpperCase() !== 'ES'
-  const servicio = isInternational ? 74 : 1
+  const servicio = isInternational ? 74 : 96
   const horario  = isInternational ? 3  : 18
   return `<Servicios uidcliente="${esc(activeUid())}" xmlns="${GLS_NS}">
   <Envio codbarras="">
@@ -62,7 +77,7 @@ function buildShipmentXml({ recipient, ref, fecha }) {
     <Portes>P</Portes>
     <Servicio>${servicio}</Servicio>
     <Horario>${horario}</Horario>
-    <Bultos>1</Bultos>
+    <Bultos>${Math.max(1, parcels)}</Bultos>
     <Peso>1</Peso>
     <Retorno>0</Retorno>
     <Pod>N</Pod>
@@ -85,7 +100,7 @@ function buildShipmentXml({ recipient, ref, fecha }) {
       <Direccion><![CDATA[${recipient.address}]]></Direccion>
       <Poblacion><![CDATA[${recipient.city}]]></Poblacion>
       <Provincia><![CDATA[${recipient.province || recipient.city}]]></Provincia>
-      <Pais>34</Pais>
+      <Pais>${glsCountryCode(recipient.country)}</Pais>
       <CP>${recipient.zip}</CP>
       <Telefono><![CDATA[${recipient.phone || ''}]]></Telefono>
       <Movil><![CDATA[${recipient.mobile || ''}]]></Movil>
@@ -137,26 +152,28 @@ function postSoap(xmlBody, soapAction) {
   })
 }
 
-// Step 1: create shipment → returns codbarras (tracking)
-async function grabaServicios(recipient, ref) {
-  const innerXml = buildShipmentXml({ recipient, ref })
+// Step 1: create shipment → returns array of codbarras (one per bulto)
+async function grabaServicios(recipient, ref, parcels = 1) {
+  const innerXml = buildShipmentXml({ recipient, ref, parcels })
   const envelope = soapEnvelope('GrabaServicios', innerXml)
   const raw = await postSoap(envelope, `${GLS_NS}GrabaServicios`)
 
-  const codMatch = raw.match(/codbarras="([^"]+)"/i)
   const retMatch = raw.match(/return="(-?\d+)"/i)
-  // collect all <Error> texts for a clean message
   const errors = [...raw.matchAll(/<Error[^>]*>([\s\S]*?)<\/Error>/gi)].map(m => m[1].trim()).filter(Boolean)
 
   if (retMatch && retMatch[1] !== '0') {
     const msg = errors.length ? errors.join(' | ') : `código ${retMatch[1]}`
     throw new Error(`GLS: ${msg}`)
   }
-  if (!codMatch || !codMatch[1]) {
+
+  // GLS returns codbarras (61884...) in the XML; the customer-facing 43... tracking number
+  // is only printed on the label PDF, not returned in the API response
+  const allCods = [...raw.matchAll(/codbarras="([^"]+)"/gi)].map(m => m[1]).filter(Boolean)
+  if (allCods.length === 0) {
     const msg = errors.length ? errors.join(' | ') : 'respuesta inesperada del servidor GLS'
     throw new Error(`GLS: ${msg}`)
   }
-  return codMatch[1]
+  return allCods
 }
 
 // Step 2: fetch label PDF for a given codbarras → returns Buffer
@@ -181,9 +198,9 @@ async function etiquetaEnvio(codbarras) {
   return Buffer.from(b64Match[1].trim(), 'base64')
 }
 
-// Public — creates shipment + fetches label PDF in one call
-// Returns { tracking: string, labelPdfBuffer: Buffer }
-async function createShipment({ recipient, ref }) {
+// Public — creates shipment + fetches label PDFs, merges into one buffer
+// Returns { tracking: string (comma-separated), labelPdfBuffer: Buffer }
+async function createShipment({ recipient, ref, parcels = 1 }) {
   if (!isConfigured()) throw new Error('GLS_UID no configurado en .env')
   if (!recipient.zip || recipient.zip.length < 4)
     throw new Error('Falta el código postal del destinatario. Edita la dirección del albarán antes de generar la etiqueta GLS.')
@@ -192,14 +209,34 @@ async function createShipment({ recipient, ref }) {
   if (!recipient.address)
     throw new Error('Falta la dirección del destinatario.')
 
-  const tracking = await grabaServicios(recipient, ref)
-  let labelPdfBuffer = null
-  try {
-    labelPdfBuffer = await etiquetaEnvio(tracking)
-  } catch (e) {
-    console.warn('[GLS] etiqueta no disponible:', e.message)
+  const trackings = await grabaServicios(recipient, ref, parcels)
+  const labelBuffers = []
+  for (const cod of trackings) {
+    try {
+      const buf = await etiquetaEnvio(cod)
+      labelBuffers.push(buf)
+    } catch (e) {
+      console.warn('[GLS] etiqueta no disponible para', cod, ':', e.message)
+    }
   }
-  return { tracking, labelPdfBuffer }
+
+  let labelPdfBuffer = null
+  if (labelBuffers.length > 0) {
+    if (labelBuffers.length === 1) {
+      labelPdfBuffer = labelBuffers[0]
+    } else {
+      const { PDFDocument } = require('pdf-lib')
+      const merged = await PDFDocument.create()
+      for (const buf of labelBuffers) {
+        const src = await PDFDocument.load(buf)
+        const pages = await merged.copyPages(src, src.getPageIndices())
+        pages.forEach(p => merged.addPage(p))
+      }
+      labelPdfBuffer = Buffer.from(await merged.save())
+    }
+  }
+
+  return { tracking: trackings.join(','), labelPdfBuffer }
 }
 
 // Cierre de jornada — llama a CierreAgencia para comunicar fin de recogidas del día

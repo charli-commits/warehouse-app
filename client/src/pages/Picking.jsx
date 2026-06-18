@@ -1,4 +1,4 @@
-import { useRef, useState, useEffect } from 'react'
+import { useRef, useState, useEffect, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { api } from '../lib/api'
 import { useAuth } from '../lib/AuthContext'
@@ -9,14 +9,20 @@ export default function Picking() {
   const navigate = useNavigate()
   const [note, setNote] = useState(null)
   const [loading, setLoading] = useState(true)
-  const [scanTarget, setScanTarget] = useState(null)
   const [decoding, setDecoding] = useState(false)
   const [forceModal, setForceModal] = useState(null)
   const [forceReason, setForceReason] = useState('')
-  const [fifoMap, setFifoMap] = useState({}) // part_id → [{lot_number, location, stock}]
-  const fileInputRef = useRef(null)
+  const [fifoMap, setFifoMap] = useState({})
+  const [scannerOpen, setScannerOpen] = useState(false)
+  const videoRef = useRef(null)
+  const readerRef = useRef(null)
+  const scanTargetRef = useRef(null)
 
   useEffect(() => { load() }, [id])
+
+  useEffect(() => {
+    if (!scannerOpen) stopScanner()
+  }, [scannerOpen])
 
   async function loadFifo(lines) {
     const partIds = [...new Set(lines.filter(l => !l.pickingLine).map(l => l.part_id))]
@@ -41,37 +47,58 @@ export default function Picking() {
     }
   }
 
-  function startScan(line) {
-    setScanTarget(line)
-    // Trigger native camera via file input
-    fileInputRef.current.value = ''
-    fileInputRef.current.click()
+  async function startScan(line) {
+    scanTargetRef.current = line
+    setScannerOpen(true)
+    await new Promise(r => setTimeout(r, 100))
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } }
+      })
+      const video = videoRef.current
+      if (!video) { stream.getTracks().forEach(t => t.stop()); return }
+      video.srcObject = stream
+      await video.play()
+      const { default: jsQR } = await import('jsqr')
+      const canvas = document.createElement('canvas')
+      const ctx = canvas.getContext('2d')
+      const active = { current: true }
+      readerRef.current = active
+
+      function tick() {
+        if (!active.current || !videoRef.current) return
+        const v = videoRef.current
+        if (v.readyState >= 2 && v.videoWidth > 0) {
+          canvas.width = v.videoWidth
+          canvas.height = v.videoHeight
+          ctx.drawImage(v, 0, 0)
+          const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height)
+          const result = jsQR(imageData.data, imageData.width, imageData.height, { inversionAttempts: 'dontInvert' })
+          if (result) {
+            active.current = false
+            stopScanner()
+            setScannerOpen(false)
+            handleScanResult(scanTargetRef.current, result.data)
+            return
+          }
+        }
+        requestAnimationFrame(tick)
+      }
+      requestAnimationFrame(tick)
+    } catch (err) {
+      setScannerOpen(false)
+      alert('No se pudo acceder a la cámara: ' + err.message)
+    }
   }
 
-  async function handleFileCapture(e) {
-    const file = e.target.files?.[0]
-    if (!file || !scanTarget) return
-    setDecoding(true)
-    try {
-      const jsQR = (await import('jsqr')).default
-      const bitmap = await createImageBitmap(file)
-      const canvas = document.createElement('canvas')
-      canvas.width = bitmap.width
-      canvas.height = bitmap.height
-      const ctx = canvas.getContext('2d')
-      ctx.drawImage(bitmap, 0, 0)
-      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height)
-      const result = jsQR(imageData.data, imageData.width, imageData.height)
-      if (result) {
-        handleScanResult(scanTarget, result.data)
-      } else {
-        alert('No se detectó ningún código QR en la imagen. Inténtalo de nuevo con mejor iluminación.')
-      }
-    } catch (err) {
-      alert('Error al procesar la imagen: ' + err.message)
-    } finally {
-      setDecoding(false)
-      setScanTarget(null)
+  function stopScanner() {
+    if (readerRef.current) {
+      readerRef.current.current = false
+      readerRef.current = null
+    }
+    if (videoRef.current?.srcObject) {
+      videoRef.current.srcObject.getTracks().forEach(t => t.stop())
+      videoRef.current.srcObject = null
     }
   }
 
@@ -121,9 +148,6 @@ export default function Picking() {
 
   return (
     <div className="min-h-screen bg-gray-50 pb-36">
-      {/* Hidden file input — triggers native iOS camera */}
-      <input ref={fileInputRef} type="file" accept="image/*" capture="environment"
-        className="hidden" onChange={handleFileCapture} />
       {/* Header */}
       <div className="bg-white border-b border-gray-200 px-4 py-3 flex items-center gap-3 sticky top-0 z-10">
         <button onClick={() => navigate('/deliveries')} className="text-gray-400 hover:text-gray-600 text-xl px-1">←</button>
@@ -195,9 +219,9 @@ export default function Picking() {
                       {forced ? '⚠️' : '✓'}
                     </div>
                   ) : (
-                    <button onClick={() => startScan(line)} disabled={decoding}
-                      className="bg-blue-600 active:bg-blue-800 disabled:opacity-50 text-white text-sm font-medium px-4 py-2.5 rounded-xl">
-                      {decoding && scanTarget?.id === line.id ? '...' : '📷 Escanear'}
+                    <button onClick={() => startScan(line)}
+                      className="bg-blue-600 active:bg-blue-800 text-white text-sm font-medium px-4 py-2.5 rounded-xl">
+                      📷 Escanear
                     </button>
                   )}
                   {!verified && (
@@ -239,6 +263,25 @@ export default function Picking() {
           </>
         )}
       </div>
+
+      {/* QR Scanner modal */}
+      {scannerOpen && (
+        <div className="fixed inset-0 bg-black z-50 flex flex-col">
+          <div className="flex items-center justify-between px-4 py-3 bg-black/80">
+            <span className="text-white font-medium">Apunta al código QR</span>
+            <button onClick={() => setScannerOpen(false)} className="text-white text-3xl leading-none px-2">×</button>
+          </div>
+          <div className="flex-1 relative flex items-center justify-center">
+            <video ref={videoRef} className="w-full h-full object-cover" autoPlay muted playsInline />
+            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+              <div className="w-64 h-64 border-2 border-white rounded-2xl opacity-70" />
+            </div>
+          </div>
+          <div className="px-4 py-4 bg-black/80 text-center">
+            <p className="text-gray-400 text-sm">Centra el código QR dentro del recuadro</p>
+          </div>
+        </div>
+      )}
 
       {/* Force modal */}
       {forceModal && (
