@@ -209,7 +209,8 @@ router.get('/:id/image-sign', async (req, res) => {
     const t = await signRes.text()
     return res.status(500).json({ error: `Supabase sign error: ${t}` })
   }
-  const { signedURL } = await signRes.json()
+  const { url } = await signRes.json()
+  const signedURL = `${SUPABASE_URL}/storage/v1${url}`
   const publicUrl = `${SUPABASE_URL}/storage/v1/object/public/parts/${filename}`
   res.json({ signedURL, publicUrl })
 })
