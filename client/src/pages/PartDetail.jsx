@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { api } from '../lib/api'
 import { useAuth } from '../lib/AuthContext'
@@ -16,6 +16,7 @@ export default function PartDetail() {
   const [adjusting, setAdjusting] = useState(false)
 
   const [uploadingImg, setUploadingImg] = useState(false)
+  const pendingSignRef = useRef(null)
 
   // Locations
   const [allLocations, setAllLocations] = useState([])
@@ -105,7 +106,9 @@ export default function PartDetail() {
     return new Promise((resolve) => {
       const img = new Image()
       const url = URL.createObjectURL(file)
+      const fallback = setTimeout(() => { URL.revokeObjectURL(url); resolve(file) }, 8000)
       img.onload = () => {
+        clearTimeout(fallback)
         URL.revokeObjectURL(url)
         let { width, height } = img
         if (width > maxPx || height > maxPx) {
@@ -115,10 +118,18 @@ export default function PartDetail() {
         const canvas = document.createElement('canvas')
         canvas.width = width; canvas.height = height
         canvas.getContext('2d').drawImage(img, 0, 0, width, height)
-        canvas.toBlob(resolve, 'image/jpeg', quality)
+        canvas.toBlob(blob => resolve(blob || file), 'image/jpeg', quality)
       }
+      img.onerror = () => { clearTimeout(fallback); URL.revokeObjectURL(url); resolve(file) }
       img.src = url
     })
+  }
+
+  function prefetchSignedUrl() {
+    const token = JSON.parse(localStorage.getItem('wh_user') || '{}')?.token
+    pendingSignRef.current = fetch(`/api/parts/${id}/image-sign`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    }).then(r => r.json()).catch(() => null)
   }
 
   async function handleImageUpload(e) {
@@ -126,17 +137,16 @@ export default function PartDetail() {
     if (!file) return
     setUploadingImg(true)
     try {
-      const compressed = await compressImage(file)
       const token = JSON.parse(localStorage.getItem('wh_user') || '{}')?.token
+      const [compressed, signData] = await Promise.all([
+        compressImage(file),
+        pendingSignRef.current || fetch(`/api/parts/${id}/image-sign`, {
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        }).then(r => r.json()),
+      ])
+      pendingSignRef.current = null
+      if (!signData?.signedURL) throw new Error(signData?.error || 'No se pudo obtener URL de subida')
 
-      // Step 1: get signed upload URL from server
-      const signRes = await fetch(`/api/parts/${id}/image-sign`, {
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-      })
-      const signData = await signRes.json()
-      if (!signRes.ok) throw new Error(signData.error)
-
-      // Step 2: upload directly from browser to Supabase
       const uploadRes = await fetch(signData.signedURL, {
         method: 'PUT',
         headers: { 'Content-Type': 'image/jpeg' },
@@ -144,7 +154,6 @@ export default function PartDetail() {
       })
       if (!uploadRes.ok) throw new Error('Error subiendo imagen a Supabase')
 
-      // Step 3: save public URL in DB
       const saveRes = await fetch(`/api/parts/${id}/image`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
@@ -229,7 +238,7 @@ export default function PartDetail() {
                   onClick={() => window.open(part.image_url.split('?')[0], '_blank')} />
               : <div className="w-24 h-24 md:w-32 md:h-32 rounded-lg border-2 border-dashed border-gray-200 bg-gray-50 flex items-center justify-center text-gray-300 text-3xl">📷</div>
             }
-            <label className={`absolute inset-0 flex items-center justify-center rounded-lg cursor-pointer bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity ${uploadingImg ? 'opacity-100' : ''}`}>
+            <label onClick={prefetchSignedUrl} className={`absolute inset-0 flex items-center justify-center rounded-lg cursor-pointer bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity ${uploadingImg ? 'opacity-100' : ''}`}>
               <span className="text-white text-xs font-medium">{uploadingImg ? 'Subiendo...' : part.image_url ? '🔄 Cambiar' : '📷 Subir'}</span>
               <input type="file" accept="image/*" capture="environment" className="hidden" onChange={handleImageUpload} disabled={uploadingImg} />
             </label>
