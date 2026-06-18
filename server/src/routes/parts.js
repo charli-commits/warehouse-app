@@ -62,11 +62,25 @@ router.get('/', async (req, res) => {
   if (category) where.category = category
   if (manufacturer) where.manufacturer = manufacturer
   if (location) where.locations = { some: { location } }
-  if (search) where.OR = [
-    { name: { contains: search } },
-    { code: { contains: search } },
-    { description: { contains: search } }
-  ]
+  if (search) {
+    const words = search.trim().split(/\s+/).filter(Boolean)
+    if (words.length > 1) {
+      // Todos los términos deben aparecer en algún campo (AND entre palabras, OR entre campos)
+      where.AND = words.map(w => ({
+        OR: [
+          { name: { contains: w, mode: 'insensitive' } },
+          { code: { contains: w, mode: 'insensitive' } },
+          { description: { contains: w, mode: 'insensitive' } }
+        ]
+      }))
+    } else {
+      where.OR = [
+        { name: { contains: search, mode: 'insensitive' } },
+        { code: { contains: search, mode: 'insensitive' } },
+        { description: { contains: search, mode: 'insensitive' } }
+      ]
+    }
+  }
 
   const include = { locations: { orderBy: { location: 'asc' } } }
   const page = Math.max(1, parseInt(req.query.page) || 1)
