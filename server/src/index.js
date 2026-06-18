@@ -28,12 +28,6 @@ app.get('/api/health', (req, res) => res.json({ ok: true }))
 // Auth routes — login y GET users son públicos, el resto usa el middleware global
 app.use('/api/auth', require('./routes/auth'))
 
-// Middleware JWT para todas las demás rutas /api/*
-app.use('/api', (req, res, next) => {
-  if (req.path.startsWith('/auth/')) return next()
-  return requireAuth(req, res, next)
-})
-
 // TEMP: stock import endpoint — remove after use
 const { PrismaClient } = require('@prisma/client')
 const _prismaImport = new PrismaClient()
@@ -63,6 +57,12 @@ app.post('/api/import-stock', async (req, res) => {
   } catch (e) {
     res.status(500).json({ error: e.message })
   }
+})
+
+// Middleware JWT para todas las demás rutas /api/*
+app.use('/api', (req, res, next) => {
+  if (req.path.startsWith('/auth/')) return next()
+  return requireAuth(req, res, next)
 })
 
 app.use('/api/parts',       require('./routes/parts'))
