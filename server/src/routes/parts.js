@@ -5,7 +5,7 @@ const multer = require('multer')
 const path = require('path')
 
 const SUPABASE_URL = process.env.SUPABASE_URL || 'https://wtpaggzdwhpxxtatcpxo.supabase.co'
-const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Ind0cGFnZ3pkd2hweHh0YXRjcHhvIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4MTc2MDk3MiwiZXhwIjoyMDk3MzM2OTcyfQ.jvDVqVmz859pCv1im01PEJ9XHAd9FlJvQgAlO7uvd74'
+const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY || ''
 
 async function supabaseUpload(filename, buffer, mimetype) {
   const res = await fetch(`${SUPABASE_URL}/storage/v1/object/parts/${filename}`, {
@@ -196,20 +196,43 @@ router.get('/locations/all', async (req, res) => {
   res.json(rows.map(r => r.location))
 })
 
-// POST /api/parts/:id/image — subir/reemplazar foto a Supabase
+// GET /api/parts/:id/image-sign — returns a signed upload URL for direct client→Supabase upload
+router.get('/:id/image-sign', async (req, res) => {
+  const id = Number(req.params.id)
+  const filename = `manual/${id}_${Date.now()}.jpg`
+  const signRes = await fetch(`${SUPABASE_URL}/storage/v1/object/upload/sign/parts/${filename}`, {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${SUPABASE_KEY}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ upsert: true }),
+  })
+  if (!signRes.ok) {
+    const t = await signRes.text()
+    return res.status(500).json({ error: `Supabase sign error: ${t}` })
+  }
+  const { signedURL } = await signRes.json()
+  const publicUrl = `${SUPABASE_URL}/storage/v1/object/public/parts/${filename}`
+  res.json({ signedURL, publicUrl })
+})
+
+// PATCH /api/parts/:id/image — save image_url after direct upload
+router.patch('/:id/image', async (req, res) => {
+  const id = Number(req.params.id)
+  const { image_url } = req.body
+  if (!image_url) return res.status(400).json({ error: 'image_url requerido' })
+  const part = await prisma.part.update({ where: { id }, data: { image_url } })
+  res.json({ image_url: part.image_url })
+})
+
+// POST /api/parts/:id/image — legacy fallback (kept for compatibility)
 router.post('/:id/image', upload.single('image'), async (req, res) => {
   const id = Number(req.params.id)
   if (!req.file) return res.status(400).json({ error: 'No se recibió ninguna imagen' })
-
-  const ext = path.extname(req.file.originalname).toLowerCase() || '.jpg'
-  const filename = `manual/${id}_${Date.now()}${ext}`
-
+  const filename = `manual/${id}_${Date.now()}.jpg`
   try {
     await supabaseUpload(filename, req.file.buffer, req.file.mimetype)
   } catch (err) {
     return res.status(500).json({ error: err.message })
   }
-
   const publicUrl = `${SUPABASE_URL}/storage/v1/object/public/parts/${filename}`
   const part = await prisma.part.update({ where: { id }, data: { image_url: publicUrl } })
   res.json({ image_url: part.image_url })

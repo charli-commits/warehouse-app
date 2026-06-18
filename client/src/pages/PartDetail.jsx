@@ -127,17 +127,33 @@ export default function PartDetail() {
     setUploadingImg(true)
     try {
       const compressed = await compressImage(file)
-      const fd = new FormData()
-      fd.append('image', compressed, 'photo.jpg')
       const token = JSON.parse(localStorage.getItem('wh_user') || '{}')?.token
-      const res = await fetch(`/api/parts/${id}/image`, {
-        method: 'POST',
+
+      // Step 1: get signed upload URL from server
+      const signRes = await fetch(`/api/parts/${id}/image-sign`, {
         headers: token ? { Authorization: `Bearer ${token}` } : {},
-        body: fd,
       })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error)
-      setPart(p => ({ ...p, image_url: data.image_url + '?t=' + Date.now() }))
+      const signData = await signRes.json()
+      if (!signRes.ok) throw new Error(signData.error)
+
+      // Step 2: upload directly from browser to Supabase
+      const uploadRes = await fetch(signData.signedURL, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'image/jpeg' },
+        body: compressed,
+      })
+      if (!uploadRes.ok) throw new Error('Error subiendo imagen a Supabase')
+
+      // Step 3: save public URL in DB
+      const saveRes = await fetch(`/api/parts/${id}/image`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+        body: JSON.stringify({ image_url: signData.publicUrl }),
+      })
+      const saveData = await saveRes.json()
+      if (!saveRes.ok) throw new Error(saveData.error)
+
+      setPart(p => ({ ...p, image_url: saveData.image_url + '?t=' + Date.now() }))
     } catch (err) {
       alert(err.message)
     } finally {
