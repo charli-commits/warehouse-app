@@ -28,6 +28,20 @@ app.get('/api/health', (req, res) => res.json({ ok: true }))
 // Auth routes — login y GET users son públicos, el resto usa el middleware global
 app.use('/api/auth', require('./routes/auth'))
 
+// TEMP: update image URLs
+const { PrismaClient: _PC } = require('@prisma/client')
+const _pi = new _PC()
+app.post('/api/update-images', async (req, res) => {
+  if (req.headers['x-import-secret'] !== 'wh-import-2026') return res.status(403).json({ error: 'forbidden' })
+  const updates = req.body
+  if (!Array.isArray(updates)) return res.status(400).json({ error: 'expected array' })
+  let updated = 0
+  for (const { code, image_url } of updates) {
+    await _pi.part.updateMany({ where: { code }, data: { image_url } })
+    updated++
+  }
+  res.json({ ok: true, updated })
+})
 
 // Middleware JWT para todas las demás rutas /api/*
 app.use('/api', (req, res, next) => {
