@@ -34,8 +34,12 @@ function ManageList({ title, items, onCreate, onRename, onDelete, emptyText }) {
   }
 
   async function handleDelete(item) {
-    if (!confirm(`¿Eliminar "${item}"? Se quitará de todas las piezas.`)) return
-    await onDelete(item)
+    if (!confirm(`¿Eliminar "${item}"?`)) return
+    try {
+      await onDelete(item)
+    } catch (err) {
+      alert(err.message)
+    }
   }
 
   async function handleCreate(e) {

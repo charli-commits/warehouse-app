@@ -76,21 +76,15 @@ router.put('/rename', async (req, res) => {
   res.json({ updated: result.count })
 })
 
-// DELETE /api/locations/:name — removes all partLocation entries for that location
+// DELETE /api/locations/:name — only allowed if no parts are assigned there
 router.delete('/:name', async (req, res) => {
   const name = decodeURIComponent(req.params.name)
-  const affected = await prisma.partLocation.findMany({ where: { location: name }, select: { part_id: true } })
-  const partIds = [...new Set(affected.map(r => r.part_id))]
-  const result = await prisma.partLocation.deleteMany({ where: { location: name } })
-  for (const part_id of partIds) {
-    const locs = await prisma.partLocation.findMany({ where: { part_id }, select: { stock: true } })
-    const total = locs.reduce((s, l) => s + l.stock, 0)
-    await prisma.part.update({ where: { id: part_id }, data: { stock_current: total } })
-  }
+  const count = await prisma.partLocation.count({ where: { location: name } })
+  if (count > 0) return res.status(409).json({ error: `No se puede eliminar: hay ${count} pieza(s) en esta ubicación.` })
   const list = await getPredefined()
   const filtered = list.filter(l => l !== name)
   if (filtered.length !== list.length) await setPredefined(filtered)
-  res.json({ deleted: result.count })
+  res.json({ deleted: 0 })
 })
 
 module.exports = router
