@@ -224,6 +224,26 @@ router.patch('/:id/image', async (req, res) => {
   res.json({ image_url: part.image_url })
 })
 
+// POST /api/parts/:id/image-upload — receives base64 image from client, uploads to Supabase
+router.post('/:id/image-upload', async (req, res) => {
+  const id = Number(req.params.id)
+  const { imageBase64 } = req.body
+  if (!imageBase64) return res.status(400).json({ error: 'imageBase64 requerido' })
+  const matches = imageBase64.match(/^data:([^;]+);base64,(.+)$/)
+  if (!matches) return res.status(400).json({ error: 'Formato de imagen inválido' })
+  const mimetype = matches[1]
+  const buffer = Buffer.from(matches[2], 'base64')
+  const filename = `manual/${id}_${Date.now()}.jpg`
+  try {
+    await supabaseUpload(filename, buffer, mimetype)
+  } catch (err) {
+    return res.status(500).json({ error: err.message })
+  }
+  const publicUrl = `${SUPABASE_URL}/storage/v1/object/public/parts/${filename}`
+  const part = await prisma.part.update({ where: { id }, data: { image_url: publicUrl } })
+  res.json({ image_url: part.image_url })
+})
+
 // POST /api/parts/:id/image — legacy fallback (kept for compatibility)
 router.post('/:id/image', upload.single('image'), async (req, res) => {
   const id = Number(req.params.id)

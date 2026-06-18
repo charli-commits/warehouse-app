@@ -16,7 +16,7 @@ export default function PartDetail() {
   const [adjusting, setAdjusting] = useState(false)
 
   const [uploadingImg, setUploadingImg] = useState(false)
-  const pendingSignRef = useRef(null)
+  const fileInputRef = useRef(null)
 
   // Locations
   const [allLocations, setAllLocations] = useState([])
@@ -125,11 +125,19 @@ export default function PartDetail() {
     })
   }
 
-  function prefetchSignedUrl() {
-    const token = JSON.parse(localStorage.getItem('wh_user') || '{}')?.token
-    pendingSignRef.current = fetch(`/api/parts/${id}/image-sign`, {
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
-    }).then(r => r.json()).catch(() => null)
+  function handleUploadButtonClick() {
+    // Wake Render before opening file picker (fire-and-forget)
+    fetch('/api/health').catch(() => {})
+    fileInputRef.current?.click()
+  }
+
+  function toBase64(blob) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader()
+      reader.onload = () => resolve(reader.result)
+      reader.onerror = reject
+      reader.readAsDataURL(blob)
+    })
   }
 
   async function handleImageUpload(e) {
@@ -137,32 +145,20 @@ export default function PartDetail() {
     if (!file) return
     setUploadingImg(true)
     try {
+      const compressed = await compressImage(file)
+      const base64 = await toBase64(compressed)
       const token = JSON.parse(localStorage.getItem('wh_user') || '{}')?.token
-      const [compressed, signData] = await Promise.all([
-        compressImage(file),
-        pendingSignRef.current || fetch(`/api/parts/${id}/image-sign`, {
-          headers: token ? { Authorization: `Bearer ${token}` } : {},
-        }).then(r => r.json()),
-      ])
-      pendingSignRef.current = null
-      if (!signData?.signedURL) throw new Error(signData?.error || 'No se pudo obtener URL de subida')
-
-      const uploadRes = await fetch(signData.signedURL, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'image/jpeg' },
-        body: await compressed.arrayBuffer(),
+      const res = await fetch(`/api/parts/${id}/image-upload`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ imageBase64: base64 }),
       })
-      if (!uploadRes.ok) throw new Error('Error subiendo imagen a Supabase')
-
-      const saveRes = await fetch(`/api/parts/${id}/image`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-        body: JSON.stringify({ image_url: signData.publicUrl }),
-      })
-      const saveData = await saveRes.json()
-      if (!saveRes.ok) throw new Error(saveData.error)
-
-      setPart(p => ({ ...p, image_url: saveData.image_url + '?t=' + Date.now() }))
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Error subiendo imagen')
+      setPart(p => ({ ...p, image_url: data.image_url + '?t=' + Date.now() }))
     } catch (err) {
       alert(err.message)
     } finally {
@@ -238,10 +234,10 @@ export default function PartDetail() {
                   onClick={() => window.open(part.image_url.split('?')[0], '_blank')} />
               : <div className="w-24 h-24 md:w-32 md:h-32 rounded-lg border-2 border-dashed border-gray-200 bg-gray-50 flex items-center justify-center text-gray-300 text-3xl">📷</div>
             }
-            <label onClick={prefetchSignedUrl} className={`absolute inset-0 flex items-center justify-center rounded-lg cursor-pointer bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity ${uploadingImg ? 'opacity-100' : ''}`}>
+            <button onClick={handleUploadButtonClick} disabled={uploadingImg} className={`absolute inset-0 flex items-center justify-center rounded-lg cursor-pointer bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity ${uploadingImg ? 'opacity-100' : ''}`}>
               <span className="text-white text-xs font-medium">{uploadingImg ? 'Subiendo...' : part.image_url ? '🔄 Cambiar' : '📷 Subir'}</span>
-              <input type="file" accept="image/*" capture="environment" className="hidden" onChange={handleImageUpload} disabled={uploadingImg} />
-            </label>
+            </button>
+            <input ref={fileInputRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={handleImageUpload} disabled={uploadingImg} />
           </div>
           <div className="flex-1 min-w-0">
             <div className="flex items-start justify-between gap-2">
