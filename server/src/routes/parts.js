@@ -6,7 +6,7 @@ const path = require('path')
 const https = require('https')
 
 const SUPABASE_URL = process.env.SUPABASE_URL || 'https://wtpaggzdwhpxxtatcpxo.supabase.co'
-const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY || ''
+const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Ind0cGFnZ3pkd2hweHh0YXRjcHhvIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4MTc2MDk3MiwiZXhwIjoyMDk3MzM2OTcyfQ.jvDVqVmz859pCv1im01PEJ9XHAd9FlJvQgAlO7uvd74'
 
 function supabaseUpload(filename, buffer, mimetype) {
   return new Promise((resolve, reject) => {
