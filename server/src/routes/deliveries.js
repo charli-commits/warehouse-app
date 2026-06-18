@@ -409,6 +409,7 @@ router.post('/:id/ship', async (req, res) => {
           country: resolveCountryIso(addr.country),
           phone: addr.phone || '',
           mobile: addr.mobile || addr.phone || '',
+          email: addr.email || '',
         }
       })
       gls_tracking = result.tracking

@@ -134,6 +134,7 @@ function DeliveryForm({ initial, onSave, onCancel }) {
         country: Array.isArray(p.country_id) ? p.country_id[1] : (f2v(p.country_id) || 'España'),
         phone: f2v(p.phone),
         mobile: f2v(p.mobile),
+        email: f2v(p.email),
       } : null
     }))
   }
@@ -246,6 +247,12 @@ function DeliveryForm({ initial, onSave, onCancel }) {
                     placeholder="Ej: +4917612345678"
                     className="w-full border border-gray-300 rounded px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
                 </div>
+                <div className="col-span-2">
+                  <label className="block text-xs text-gray-500 mb-0.5">Email</label>
+                  <input type="email" value={addr.email || ''} onChange={e => updateAddr('email', e.target.value)}
+                    placeholder="Ej: cliente@email.com"
+                    className="w-full border border-gray-300 rounded px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                </div>
                 <div className="col-span-2 flex justify-end">
                   <button type="button" onClick={() => setEditingAddr(false)}
                     className="text-xs text-gray-500 hover:text-gray-800 font-medium">Listo</button>
@@ -297,6 +304,12 @@ function DeliveryForm({ initial, onSave, onCancel }) {
             <div>
               <label className="block text-xs text-gray-500 mb-0.5">País</label>
               <input type="text" value={addr?.country || 'España'} onChange={e => updateAddr('country', e.target.value)}
+                className="w-full border border-gray-300 rounded px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+            </div>
+            <div className="col-span-2">
+              <label className="block text-xs text-gray-500 mb-0.5">Email</label>
+              <input type="email" value={addr?.email || ''} onChange={e => updateAddr('email', e.target.value)}
+                placeholder="Ej: cliente@email.com"
                 className="w-full border border-gray-300 rounded px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
             </div>
           </div>
