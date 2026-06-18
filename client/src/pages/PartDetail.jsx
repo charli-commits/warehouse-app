@@ -108,7 +108,12 @@ export default function PartDetail() {
     try {
       const fd = new FormData()
       fd.append('image', file)
-      const res = await fetch(`/api/parts/${id}/image`, { method: 'POST', body: fd })
+      const token = JSON.parse(localStorage.getItem('wh_user') || '{}')?.token
+      const res = await fetch(`/api/parts/${id}/image`, {
+        method: 'POST',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        body: fd,
+      })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error)
       setPart(p => ({ ...p, image_url: data.image_url + '?t=' + Date.now() }))
