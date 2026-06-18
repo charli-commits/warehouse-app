@@ -265,3 +265,8 @@ model OdooCache {
 
   @@unique([type, odoo_id])
 }
+
+model Setting {
+  key   String @id
+  value String
+}

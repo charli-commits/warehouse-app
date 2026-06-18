@@ -19,9 +19,11 @@ function RoleBadge({ role }) {
   )
 }
 
-function ManageList({ title, items, onRename, onDelete, emptyText, hint }) {
+function ManageList({ title, items, onCreate, onRename, onDelete, emptyText }) {
   const [editing, setEditing] = useState(null)
   const [editVal, setEditVal] = useState('')
+  const [showNew, setShowNew] = useState(false)
+  const [newVal, setNewVal] = useState('')
 
   function startEdit(item) { setEditing(item); setEditVal(item) }
 
@@ -36,12 +38,29 @@ function ManageList({ title, items, onRename, onDelete, emptyText, hint }) {
     await onDelete(item)
   }
 
+  async function handleCreate(e) {
+    e.preventDefault()
+    if (!newVal.trim()) return
+    await onCreate(newVal.trim())
+    setNewVal(''); setShowNew(false)
+  }
+
   return (
     <div className="bg-white rounded-xl border border-gray-200 overflow-hidden mb-6">
-      <div className="px-4 py-3 border-b border-gray-100">
+      <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
         <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">{title}</div>
-        {hint && <p className="text-xs text-gray-400 mt-0.5">{hint}</p>}
+        <button onClick={() => setShowNew(s => !s)} className="text-xs font-medium text-blue-600 hover:text-blue-800">
+          {showNew ? 'Cancelar' : '+ Nueva'}
+        </button>
       </div>
+      {showNew && (
+        <form onSubmit={handleCreate} className="flex gap-2 p-3 border-b border-gray-100 bg-gray-50">
+          <input autoFocus value={newVal} onChange={e => setNewVal(e.target.value)}
+            placeholder="Nombre..."
+            className="flex-1 border border-gray-300 rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+          <button type="submit" className="bg-blue-600 text-white text-sm px-3 py-1.5 rounded-md hover:bg-blue-700">Crear</button>
+        </form>
+      )}
       <div className="divide-y divide-gray-100 max-h-72 overflow-y-auto">
         {items.length === 0 && <p className="px-4 py-3 text-sm text-gray-400">{emptyText}</p>}
         {items.map(item => (
@@ -146,7 +165,7 @@ export default function Settings() {
           title="Ubicaciones"
           items={locations}
           emptyText="No hay ubicaciones"
-          hint="Las ubicaciones se crean al asignar stock a una pieza."
+          onCreate={async (name) => { await api.createLocation(name); loadLocations() }}
           onRename={async (from, to) => { await api.renameLocation(from, to); loadLocations() }}
           onDelete={async (name) => { await api.deleteLocation(name); loadLocations() }}
         />
@@ -158,7 +177,7 @@ export default function Settings() {
           title="Categorías"
           items={categories}
           emptyText="No hay categorías"
-          hint="Las categorías se asignan al editar una pieza."
+          onCreate={async (name) => { await api.createCategory(name); loadCategories() }}
           onRename={async (from, to) => { await api.renameCategory(from, to); loadCategories() }}
           onDelete={async (name) => { await api.deleteCategory(name); loadCategories() }}
         />

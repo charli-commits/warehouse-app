@@ -100,11 +100,13 @@ export const api = {
   getLocations: () => request('/locations'),
   renameLocation: (from, to) => request('/locations/rename', { method: 'PUT', body: { from, to } }),
   deleteLocation: (name) => request(`/locations/${encodeURIComponent(name)}`, { method: 'DELETE' }),
+  createLocation: (name) => request('/locations/predefined', { method: 'POST', body: { name } }),
 
   // Categories
   getCategories: () => request('/parts/categories'),
   renameCategory: (from, to) => request('/parts/categories/rename', { method: 'PUT', body: { from, to } }),
   deleteCategory: (name) => request(`/parts/categories/${encodeURIComponent(name)}`, { method: 'DELETE' }),
+  createCategory: (name) => request('/parts/categories', { method: 'POST', body: { name } }),
 
   // Search
   globalSearch: (q) => request(`/search?q=${encodeURIComponent(q)}`),

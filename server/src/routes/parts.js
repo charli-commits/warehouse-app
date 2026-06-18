@@ -35,21 +35,54 @@ router.get('/stats', async (req, res) => {
   })
 })
 
-// GET /api/parts/categories — distinct categories (for filter dropdown)
+// GET /api/parts/categories — union of used + predefined categories
 router.get('/categories', async (req, res) => {
   const rows = await prisma.part.findMany({
     where: { category: { not: null } },
     select: { category: true },
     distinct: ['category']
   })
-  res.json(rows.map(r => r.category).filter(Boolean).sort())
+  const setting = await prisma.setting.findUnique({ where: { key: 'predefined_categories' } })
+  const predefined = setting ? JSON.parse(setting.value) : []
+  const all = [...new Set([...rows.map(r => r.category).filter(Boolean), ...predefined])].sort()
+  res.json(all)
 })
+
+// POST /api/parts/categories — create predefined category
+router.post('/categories', async (req, res) => {
+  const { name } = req.body
+  if (!name?.trim()) return res.status(400).json({ error: 'name requerido' })
+  const setting = await prisma.setting.findUnique({ where: { key: 'predefined_categories' } })
+  const list = setting ? JSON.parse(setting.value) : []
+  if (!list.includes(name.trim())) list.push(name.trim())
+  await prisma.setting.upsert({
+    where: { key: 'predefined_categories' },
+    update: { value: JSON.stringify(list) },
+    create: { key: 'predefined_categories', value: JSON.stringify(list) }
+  })
+  res.json({ ok: true })
+})
+
+async function getCatPredefined() {
+  const s = await prisma.setting.findUnique({ where: { key: 'predefined_categories' } })
+  return s ? JSON.parse(s.value) : []
+}
+async function setCatPredefined(list) {
+  await prisma.setting.upsert({
+    where: { key: 'predefined_categories' },
+    update: { value: JSON.stringify(list) },
+    create: { key: 'predefined_categories', value: JSON.stringify(list) }
+  })
+}
 
 // PUT /api/parts/categories/rename — { from, to }
 router.put('/categories/rename', async (req, res) => {
   const { from, to } = req.body
   if (!from || !to) return res.status(400).json({ error: 'from y to requeridos' })
   const result = await prisma.part.updateMany({ where: { category: from }, data: { category: to.trim() } })
+  const list = await getCatPredefined()
+  const idx = list.indexOf(from)
+  if (idx !== -1) { list[idx] = to.trim(); await setCatPredefined(list) }
   res.json({ updated: result.count })
 })
 
@@ -57,6 +90,9 @@ router.put('/categories/rename', async (req, res) => {
 router.delete('/categories/:name', async (req, res) => {
   const name = decodeURIComponent(req.params.name)
   const result = await prisma.part.updateMany({ where: { category: name }, data: { category: null } })
+  const list = await getCatPredefined()
+  const filtered = list.filter(c => c !== name)
+  if (filtered.length !== list.length) await setCatPredefined(filtered)
   res.json({ updated: result.count })
 })
 
