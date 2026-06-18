@@ -98,6 +98,13 @@ export const api = {
 
   // Locations
   getLocations: () => request('/locations'),
+  renameLocation: (from, to) => request('/locations/rename', { method: 'PUT', body: { from, to } }),
+  deleteLocation: (name) => request(`/locations/${encodeURIComponent(name)}`, { method: 'DELETE' }),
+
+  // Categories
+  getCategories: () => request('/parts/categories'),
+  renameCategory: (from, to) => request('/parts/categories/rename', { method: 'PUT', body: { from, to } }),
+  deleteCategory: (name) => request(`/parts/categories/${encodeURIComponent(name)}`, { method: 'DELETE' }),
 
   // Search
   globalSearch: (q) => request(`/search?q=${encodeURIComponent(q)}`),

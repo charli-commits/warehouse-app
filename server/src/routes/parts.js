@@ -45,6 +45,21 @@ router.get('/categories', async (req, res) => {
   res.json(rows.map(r => r.category).filter(Boolean).sort())
 })
 
+// PUT /api/parts/categories/rename — { from, to }
+router.put('/categories/rename', async (req, res) => {
+  const { from, to } = req.body
+  if (!from || !to) return res.status(400).json({ error: 'from y to requeridos' })
+  const result = await prisma.part.updateMany({ where: { category: from }, data: { category: to.trim() } })
+  res.json({ updated: result.count })
+})
+
+// DELETE /api/parts/categories/:name — clears category from all parts
+router.delete('/categories/:name', async (req, res) => {
+  const name = decodeURIComponent(req.params.name)
+  const result = await prisma.part.updateMany({ where: { category: name }, data: { category: null } })
+  res.json({ updated: result.count })
+})
+
 // GET /api/parts/manufacturers — distinct manufacturers (for filter dropdown)
 router.get('/manufacturers', async (req, res) => {
   const rows = await prisma.part.findMany({

@@ -29,4 +29,28 @@ router.get('/', async (req, res) => {
   res.json(Object.values(map))
 })
 
+// PUT /api/locations/rename — { from, to }
+router.put('/rename', async (req, res) => {
+  const { from, to } = req.body
+  if (!from || !to) return res.status(400).json({ error: 'from y to requeridos' })
+  const result = await prisma.partLocation.updateMany({ where: { location: from }, data: { location: to.trim() } })
+  res.json({ updated: result.count })
+})
+
+// DELETE /api/locations/:name — removes all partLocation entries for that location
+router.delete('/:name', async (req, res) => {
+  const name = decodeURIComponent(req.params.name)
+  // Get affected part IDs before deleting
+  const affected = await prisma.partLocation.findMany({ where: { location: name }, select: { part_id: true } })
+  const partIds = [...new Set(affected.map(r => r.part_id))]
+  const result = await prisma.partLocation.deleteMany({ where: { location: name } })
+  // Recalculate stock_current only for affected parts
+  for (const part_id of partIds) {
+    const locs = await prisma.partLocation.findMany({ where: { part_id }, select: { stock: true } })
+    const total = locs.reduce((s, l) => s + l.stock, 0)
+    await prisma.part.update({ where: { id: part_id }, data: { stock_current: total } })
+  }
+  res.json({ deleted: result.count })
+})
+
 module.exports = router

@@ -19,6 +19,52 @@ function RoleBadge({ role }) {
   )
 }
 
+function ManageList({ title, items, onRename, onDelete, emptyText, hint }) {
+  const [editing, setEditing] = useState(null)
+  const [editVal, setEditVal] = useState('')
+
+  function startEdit(item) { setEditing(item); setEditVal(item) }
+
+  async function saveEdit(original) {
+    if (!editVal.trim() || editVal.trim() === original) { setEditing(null); return }
+    await onRename(original, editVal.trim())
+    setEditing(null)
+  }
+
+  async function handleDelete(item) {
+    if (!confirm(`¿Eliminar "${item}"? Se quitará de todas las piezas.`)) return
+    await onDelete(item)
+  }
+
+  return (
+    <div className="bg-white rounded-xl border border-gray-200 overflow-hidden mb-6">
+      <div className="px-4 py-3 border-b border-gray-100">
+        <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">{title}</div>
+        {hint && <p className="text-xs text-gray-400 mt-0.5">{hint}</p>}
+      </div>
+      <div className="divide-y divide-gray-100 max-h-72 overflow-y-auto">
+        {items.length === 0 && <p className="px-4 py-3 text-sm text-gray-400">{emptyText}</p>}
+        {items.map(item => (
+          <div key={item} className="flex items-center justify-between px-4 py-2.5">
+            {editing === item ? (
+              <input autoFocus value={editVal} onChange={e => setEditVal(e.target.value)}
+                onBlur={() => saveEdit(item)}
+                onKeyDown={e => { if (e.key === 'Enter') saveEdit(item); if (e.key === 'Escape') setEditing(null) }}
+                className="flex-1 border border-blue-400 rounded px-2 py-1 text-sm focus:outline-none mr-2" />
+            ) : (
+              <span className="text-sm text-gray-800 flex-1">{item}</span>
+            )}
+            <div className="flex gap-3">
+              <button onClick={() => startEdit(item)} className="text-xs text-blue-500 hover:text-blue-700">Renombrar</button>
+              <button onClick={() => handleDelete(item)} className="text-xs text-red-400 hover:text-red-600">Eliminar</button>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 export default function Settings() {
   const { user, logout } = useAuth()
   const [users, setUsers] = useState([])
@@ -26,10 +72,15 @@ export default function Settings() {
   const [form, setForm] = useState({ name: '', pin: '', role: 'agente_sat' })
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState(null)
-  const [editingRole, setEditingRole] = useState(null) // userId being edited
+  const [editingRole, setEditingRole] = useState(null)
+  const [locations, setLocations] = useState([])
+  const [categories, setCategories] = useState([])
+
+  const loadLocations = () => api.getLocations().then(ls => setLocations(ls.map(l => l.location).sort()))
+  const loadCategories = () => api.getCategories().then(setCategories)
 
   const load = () => api.getUsers().then(setUsers).catch(() => {})
-  useEffect(() => { load() }, [])
+  useEffect(() => { load(); loadLocations(); loadCategories() }, [])
 
   async function handleCreate(e) {
     e.preventDefault()
@@ -88,6 +139,30 @@ export default function Settings() {
           </button>
         </div>
       </div>
+
+      {/* Ubicaciones */}
+      {user?.role === 'admin' && (
+        <ManageList
+          title="Ubicaciones"
+          items={locations}
+          emptyText="No hay ubicaciones"
+          hint="Las ubicaciones se crean al asignar stock a una pieza."
+          onRename={async (from, to) => { await api.renameLocation(from, to); loadLocations() }}
+          onDelete={async (name) => { await api.deleteLocation(name); loadLocations() }}
+        />
+      )}
+
+      {/* Categorías */}
+      {user?.role === 'admin' && (
+        <ManageList
+          title="Categorías"
+          items={categories}
+          emptyText="No hay categorías"
+          hint="Las categorías se asignan al editar una pieza."
+          onRename={async (from, to) => { await api.renameCategory(from, to); loadCategories() }}
+          onDelete={async (name) => { await api.deleteCategory(name); loadCategories() }}
+        />
+      )}
 
       {/* Gestión de usuarios — solo admin */}
       {user?.role === 'admin' && (
