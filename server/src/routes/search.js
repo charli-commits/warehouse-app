@@ -13,9 +13,9 @@ router.get('/', async (req, res) => {
     prisma.part.findMany({
       where: {
         OR: [
-          { code: { contains: query } },
-          { name: { contains: query } },
-          { description: { contains: query } },
+          { code: { contains: query, mode: 'insensitive' } },
+          { name: { contains: query, mode: 'insensitive' } },
+          { description: { contains: query, mode: 'insensitive' } },
         ]
       },
       select: { id: true, code: true, name: true, category: true, stock_current: true, unit: true },
