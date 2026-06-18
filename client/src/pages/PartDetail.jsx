@@ -234,9 +234,15 @@ export default function PartDetail() {
                   onClick={() => window.open(part.image_url.split('?')[0], '_blank')} />
               : <div className="w-24 h-24 md:w-32 md:h-32 rounded-lg border-2 border-dashed border-gray-200 bg-gray-50 flex items-center justify-center text-gray-300 text-3xl">📷</div>
             }
-            <button onClick={handleUploadButtonClick} disabled={uploadingImg} className={`absolute inset-0 flex items-center justify-center rounded-lg cursor-pointer bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity ${uploadingImg ? 'opacity-100' : ''}`}>
-              <span className="text-white text-xs font-medium">{uploadingImg ? 'Subiendo...' : part.image_url ? '🔄 Cambiar' : '📷 Subir'}</span>
-            </button>
+            {uploadingImg
+              ? <div className="absolute inset-0 flex items-center justify-center rounded-lg bg-black/40">
+                  <span className="text-white text-xs font-medium">Subiendo...</span>
+                </div>
+              : <button onClick={handleUploadButtonClick} disabled={uploadingImg}
+                  className="absolute bottom-1 right-1 bg-black/60 hover:bg-black/80 text-white rounded-md px-1.5 py-0.5 text-xs opacity-0 group-hover:opacity-100 transition-opacity leading-tight">
+                  {part.image_url ? '🔄' : '📷'}
+                </button>
+            }
             <input ref={fileInputRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={handleImageUpload} disabled={uploadingImg} />
           </div>
           <div className="flex-1 min-w-0">
