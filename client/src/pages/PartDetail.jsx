@@ -182,6 +182,7 @@ export default function PartDetail() {
           <div className="relative shrink-0 group">
             {part.image_url
               ? <img src={part.image_url} alt={part.name}
+                  onError={e => { e.target.style.display = 'none' }}
                   className="w-24 h-24 md:w-32 md:h-32 object-cover rounded-lg border border-gray-200 cursor-pointer"
                   onClick={() => window.open(part.image_url.split('?')[0], '_blank')} />
               : <div className="w-24 h-24 md:w-32 md:h-32 rounded-lg border-2 border-dashed border-gray-200 bg-gray-50 flex items-center justify-center text-gray-300 text-3xl">📷</div>
