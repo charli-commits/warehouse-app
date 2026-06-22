@@ -443,6 +443,20 @@ router.post('/:id/ship', async (req, res) => {
 })
 
 // POST /api/deliveries/:id/cancel-gls — cancel GLS shipment via BorraServicios, revert to READY
+// POST /api/deliveries/:id/force-ready — admin: force status back to READY without calling GLS
+router.post('/:id/force-ready', async (req, res) => {
+  const id = Number(req.params.id)
+  const note = await prisma.deliveryNote.findUnique({ where: { id } })
+  if (!note) return res.status(404).json({ error: 'Albarán no encontrado' })
+  const updated = await prisma.deliveryNote.update({
+    where: { id },
+    data: { status: 'READY', gls_tracking: null, gls_codbarras: null },
+    include: { lines: { include: { part: { select: { id: true, code: true, name: true, unit: true } } } } }
+  })
+  await prisma.deliveryNoteEvent.create({ data: { delivery_note_id: id, status: 'READY' } })
+  res.json(updated)
+})
+
 router.post('/:id/cancel-gls', async (req, res) => {
   const id = Number(req.params.id)
   const note = await prisma.deliveryNote.findUnique({ where: { id } })

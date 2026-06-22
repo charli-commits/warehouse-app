@@ -447,6 +447,15 @@ export default function Deliveries() {
     catch (err) { alert(err.message) }
   }
 
+  async function handleForceReady(id) {
+    if (!confirm('¿Forzar estado a READY? Usa esto solo si GLS ya fue anulado pero el estado no se actualizó.')) return
+    try {
+      const updated = await api.forceReady(id)
+      load()
+      setDetailNote(updated)
+    } catch (err) { alert(err.message) }
+  }
+
   async function handleCancelGls(id) {
     if (!confirm('¿Anular el envío GLS? Esto cancelará la recogida en GLS y volverá el albarán a estado READY.')) return
     try {
@@ -986,6 +995,12 @@ export default function Deliveries() {
                   <button onClick={() => handleCancelGls(n.id)}
                     className="w-full border border-red-300 text-red-500 hover:bg-red-50 text-sm font-medium py-2 rounded-md">
                     Anular envío GLS
+                  </button>
+                )}
+                {n.status === 'SHIPPED' && (
+                  <button onClick={() => handleForceReady(n.id)}
+                    className="w-full border border-gray-300 text-gray-400 hover:bg-gray-50 text-xs font-medium py-1.5 rounded-md">
+                    Forzar estado READY
                   </button>
                 )}
                 {!['SHIPPED','DELIVERED'].includes(n.status) && (

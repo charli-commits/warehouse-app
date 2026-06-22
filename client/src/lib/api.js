@@ -84,6 +84,7 @@ export const api = {
   },
   deliverDelivery: (id) => request(`/deliveries/${id}/deliver`, { method: 'POST' }),
   cancelGlsShipment: (id) => request(`/deliveries/${id}/cancel-gls`, { method: 'POST' }),
+  forceReady: (id) => request(`/deliveries/${id}/force-ready`, { method: 'POST' }),
   cierreJornada: () => request('/deliveries/cierre-jornada', { method: 'POST' }),
   resumenCierre: () => `${BASE}/deliveries/resumen-cierre`,
   startPicking: (id) => request(`/deliveries/${id}/start-picking`, { method: 'POST' }),
