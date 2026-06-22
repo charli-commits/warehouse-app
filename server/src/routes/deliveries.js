@@ -462,7 +462,7 @@ router.post('/:id/cancel-gls', async (req, res) => {
     data: { status: 'READY', gls_tracking: null, gls_codbarras: null },
     include: { lines: { include: { part: { select: { id: true, code: true, name: true, unit: true } } } } }
   })
-  await prisma.deliveryNoteEvent.create({ data: { delivery_note_id: id, status: 'READY', notes: 'Envío GLS anulado' } })
+  await prisma.deliveryNoteEvent.create({ data: { delivery_note_id: id, status: 'READY' } })
   res.json(updated)
 })
 
