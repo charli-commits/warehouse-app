@@ -30,7 +30,7 @@ export default function Parts() {
   const page = Math.max(1, parseInt(searchParams.get('page')) || 1)
   const pageSize = 50
 
-  // Debounce: only push `search` into the URL/query 400ms after typing stops
+  // Debounce: replace current URL entry so back button skips intermediate states
   useEffect(() => {
     const t = setTimeout(() => {
       setSearchParams(p => {
@@ -38,7 +38,7 @@ export default function Parts() {
         searchInput ? n.set('search', searchInput) : n.delete('search')
         n.delete('page')
         return n
-      })
+      }, { replace: true })
     }, 400)
     return () => clearTimeout(t)
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -118,13 +118,13 @@ export default function Parts() {
           className="border border-gray-300 rounded-md px-3 py-2 text-sm w-full md:w-60 focus:outline-none focus:ring-2 focus:ring-blue-500" />
         <div className="flex gap-2 flex-wrap w-full md:w-auto">
           <select value={category}
-            onChange={e => setSearchParams(p => { const n = new URLSearchParams(p); e.target.value ? n.set('category', e.target.value) : n.delete('category'); n.delete('page'); return n })}
+            onChange={e => setSearchParams(p => { const n = new URLSearchParams(p); e.target.value ? n.set('category', e.target.value) : n.delete('category'); n.delete('page'); return n }, { replace: true })}
             className="border border-gray-300 rounded-md px-2 py-2 text-sm flex-1 md:flex-none focus:outline-none focus:ring-2 focus:ring-blue-500">
             <option value="">Todas categ.</option>
             {categories.map(c => <option key={c} value={c}>{c}</option>)}
           </select>
           <select value={manufacturer}
-            onChange={e => setSearchParams(p => { const n = new URLSearchParams(p); e.target.value ? n.set('manufacturer', e.target.value) : n.delete('manufacturer'); n.delete('page'); return n })}
+            onChange={e => setSearchParams(p => { const n = new URLSearchParams(p); e.target.value ? n.set('manufacturer', e.target.value) : n.delete('manufacturer'); n.delete('page'); return n }, { replace: true })}
             className="border border-gray-300 rounded-md px-2 py-2 text-sm flex-1 md:flex-none focus:outline-none focus:ring-2 focus:ring-blue-500">
             <option value="">Todos fabric.</option>
             {manufacturers.map(m => <option key={m} value={m}>{m}</option>)}
@@ -132,21 +132,21 @@ export default function Parts() {
           <input
             type="text" list="locations-filter-list"
             value={location}
-            onChange={e => setSearchParams(p => { const n = new URLSearchParams(p); e.target.value ? n.set('location', e.target.value) : n.delete('location'); n.delete('page'); return n })}
+            onChange={e => setSearchParams(p => { const n = new URLSearchParams(p); e.target.value ? n.set('location', e.target.value) : n.delete('location'); n.delete('page'); return n }, { replace: true })}
             placeholder="Ubicación..."
             className="border border-gray-300 rounded-md px-2 py-2 text-sm flex-1 md:flex-none md:w-36 focus:outline-none focus:ring-2 focus:ring-blue-500" />
           <datalist id="locations-filter-list">
             {locations.map(l => <option key={l} value={l} />)}
           </datalist>
           <select value={sort}
-            onChange={e => setSearchParams(p => { const n = new URLSearchParams(p); e.target.value ? n.set('sort', e.target.value) : n.delete('sort'); n.delete('page'); return n })}
+            onChange={e => setSearchParams(p => { const n = new URLSearchParams(p); e.target.value ? n.set('sort', e.target.value) : n.delete('sort'); n.delete('page'); return n }, { replace: true })}
             className="border border-gray-300 rounded-md px-2 py-2 text-sm flex-1 md:flex-none focus:outline-none focus:ring-2 focus:ring-blue-500">
             <option value="">A-Z</option>
             <option value="most_demanded">Más enviadas</option>
           </select>
           <label className="flex items-center gap-1.5 text-sm text-gray-600 cursor-pointer">
             <input type="checkbox" checked={lowStock}
-              onChange={e => setSearchParams(p => { const n = new URLSearchParams(p); e.target.checked ? n.set('low_stock', 'true') : n.delete('low_stock'); n.delete('page'); return n })}
+              onChange={e => setSearchParams(p => { const n = new URLSearchParams(p); e.target.checked ? n.set('low_stock', 'true') : n.delete('low_stock'); n.delete('page'); return n }, { replace: true })}
               className="rounded" />
             Bajo mínimo
           </label>
