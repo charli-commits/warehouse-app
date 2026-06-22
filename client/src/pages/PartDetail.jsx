@@ -570,9 +570,9 @@ export default function PartDetail() {
             </div>
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">Ubicación</label>
-              <select value={adjustLoc} onChange={e => setAdjustLoc(e.target.value)}
+              <select required value={adjustLoc} onChange={e => setAdjustLoc(e.target.value)}
                 className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
-                <option value="">Sin ubicación</option>
+                <option value="">— Selecciona ubicación —</option>
                 {(part.locations || []).map(l => (
                   <option key={l.location} value={l.location}>{l.location}</option>
                 ))}
