@@ -489,6 +489,7 @@ export default function Deliveries() {
       return (n.odoo_partner_name || '').toLowerCase().includes(q)
           || (n.client_ref || '').toLowerCase().includes(q)
           || String(n.id).includes(q)
+          || (n.gls_tracking || '').toLowerCase().includes(q)
     })
 
   function openDetail(note) {
