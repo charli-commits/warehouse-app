@@ -305,7 +305,7 @@ async function findPartnersByOrderRef(query) {
   if (!query || query.length < 3) return []
   const orders = await odoo(
     'sale.order', 'search_read',
-    [['|', ['name', 'ilike', query], ['client_order_ref', 'ilike', query]]],
+    ['|', ['name', 'ilike', query], ['client_order_ref', 'ilike', query]],
     ['id', 'name', 'client_order_ref', 'partner_id', 'partner_shipping_id'],
     { limit: 20 }
   )
