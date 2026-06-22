@@ -133,12 +133,29 @@ export default function Movements() {
 
         {/* Paginación */}
         {pages > 1 && (
-          <div className="flex items-center justify-between px-4 py-3 border-t border-gray-100">
+          <div className="flex items-center justify-center gap-1 px-4 py-3 border-t border-gray-100 flex-wrap">
+            <button onClick={() => setPage(1)} disabled={page === 1}
+              className="px-2 py-1 text-xs rounded disabled:opacity-30 hover:bg-gray-100">«</button>
             <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}
-              className="text-sm text-gray-600 disabled:text-gray-300 hover:text-gray-900">← Anterior</button>
-            <span className="text-xs text-gray-500">Página {page} de {pages}</span>
+              className="px-2 py-1 text-xs rounded disabled:opacity-30 hover:bg-gray-100">‹</button>
+            {Array.from({ length: pages }, (_, i) => i + 1)
+              .filter(n => n === 1 || n === pages || Math.abs(n - page) <= 2)
+              .reduce((acc, n, i, arr) => {
+                if (i > 0 && n - arr[i - 1] > 1) acc.push('…')
+                acc.push(n)
+                return acc
+              }, [])
+              .map((n, i) => n === '…'
+                ? <span key={`ellipsis-${i}`} className="px-1 text-xs text-gray-400">…</span>
+                : <button key={n} onClick={() => setPage(n)}
+                    className={`w-7 h-7 text-xs rounded ${n === page ? 'bg-gray-900 text-white' : 'hover:bg-gray-100 text-gray-600'}`}>
+                    {n}
+                  </button>
+              )}
             <button onClick={() => setPage(p => Math.min(pages, p + 1))} disabled={page === pages}
-              className="text-sm text-gray-600 disabled:text-gray-300 hover:text-gray-900">Siguiente →</button>
+              className="px-2 py-1 text-xs rounded disabled:opacity-30 hover:bg-gray-100">›</button>
+            <button onClick={() => setPage(pages)} disabled={page === pages}
+              className="px-2 py-1 text-xs rounded disabled:opacity-30 hover:bg-gray-100">»</button>
           </div>
         )}
       </div>
