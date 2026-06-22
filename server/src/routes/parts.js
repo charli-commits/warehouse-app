@@ -429,9 +429,10 @@ router.post('/', async (req, res) => {
 // PUT /api/parts/:id
 router.put('/:id', async (req, res) => {
   try {
+    const { code, name, description, category, unit, stock_min, cost_price, manufacturer, image_url } = req.body
     const part = await prisma.part.update({
       where: { id: Number(req.params.id) },
-      data: req.body
+      data: { code, name, description, category, unit, stock_min, cost_price, manufacturer, image_url }
     })
     res.json(part)
   } catch (err) {
