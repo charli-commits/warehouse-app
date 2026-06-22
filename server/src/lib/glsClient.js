@@ -250,8 +250,8 @@ async function borraServicios(codbarras) {
   const innerXml = `<Servicios uidcliente="${esc(activeUid())}" xmlns="${GLS_NS}">
     ${enviosXml}
   </Servicios>`
-  const envelope = soapEnvelope('BorraServicios', innerXml)
-  const raw = await postSoap(envelope, `${GLS_NS}BorraServicios`)
+  const envelope = soapEnvelope('Anula', innerXml)
+  const raw = await postSoap(envelope, `${GLS_NS}Anula`)
   const retMatch = raw.match(/return="(-?\d+)"/i)
   const errors = [...raw.matchAll(/<Error[^>]*>([\s\S]*?)<\/Error>/gi)].map(m => m[1].trim()).filter(Boolean)
   if (retMatch && retMatch[1] !== '0') {
