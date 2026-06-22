@@ -21,6 +21,7 @@ export function getPermissions(role) {
       disassembly: isAdmin || isAlmacen,
       reposicion:  isAdmin,
       audit:       isAdmin,
+      movements:   isAdmin || isAlmacen,
       settings:    isAdmin,
     },
     parts: {

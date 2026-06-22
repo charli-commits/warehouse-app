@@ -67,6 +67,7 @@ app.use('/api/dashboard',   require('./routes/dashboard'))
 app.use('/api/disassembly', require('./routes/disassembly'))
 app.use('/api/audits',      require('./routes/audits'))
 app.use('/api/search',      require('./routes/search'))
+app.use('/api/movements',   require('./routes/movements'))
 
 // En producción, servir el build del cliente React
 if (process.env.NODE_ENV === 'production') {

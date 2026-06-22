@@ -16,6 +16,7 @@ export default function Sidebar() {
     p.nav.disassembly && { to: '/desmontaje',   label: 'Desmontaje',       icon: '🔧' },
     p.nav.reposicion  && { to: '/reposicion',   label: 'Reposición',       icon: '🔄' },
     p.nav.audit       && { to: '/auditoria',    label: 'Auditoría',        icon: '📋' },
+    p.nav.movements   && { to: '/movements',    label: 'Movimientos',      icon: '↕' },
   ].filter(Boolean)
 
   const bottomLinks = [

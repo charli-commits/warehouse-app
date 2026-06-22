@@ -17,6 +17,7 @@ import Disassembly from './pages/Disassembly'
 import Audit from './pages/Audit'
 import AuditDetail from './pages/AuditDetail'
 import Reposicion from './pages/Reposicion'
+import Movements from './pages/Movements'
 import { AuthProvider, useAuth } from './lib/AuthContext'
 import { getPermissions } from './lib/permissions'
 
@@ -53,6 +54,7 @@ function AppShell() {
             <Route path="/reposicion"          element={<Guard allowed={p.nav.reposicion}><Reposicion /></Guard>} />
             <Route path="/auditoria"           element={<Guard allowed={p.nav.audit}><Audit /></Guard>} />
             <Route path="/auditoria/:id"       element={<Guard allowed={p.nav.audit}><AuditDetail /></Guard>} />
+            <Route path="/movements"           element={<Guard allowed={p.nav.movements}><Movements /></Guard>} />
             <Route path="/settings"            element={<Settings />} />
             <Route path="*"                    element={<Navigate to="/parts" />} />
           </Routes>
