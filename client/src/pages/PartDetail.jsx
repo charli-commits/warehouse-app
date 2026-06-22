@@ -241,7 +241,7 @@ export default function PartDetail() {
                   <span className="text-white text-xs font-medium">Subiendo...</span>
                 </div>
               : <button onClick={handleUploadButtonClick} disabled={uploadingImg}
-                  className="absolute bottom-1 right-1 bg-black/60 hover:bg-black/80 text-white rounded-md px-1.5 py-0.5 text-xs opacity-0 group-hover:opacity-100 transition-opacity leading-tight">
+                  className="absolute bottom-1 right-1 bg-black/50 hover:bg-black/80 text-white rounded-md px-1.5 py-0.5 text-xs leading-tight">
                   {part.image_url ? '🔄' : '📷'}
                 </button>
             }
