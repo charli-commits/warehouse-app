@@ -400,7 +400,7 @@ router.post('/:id/ship', async (req, res) => {
     try {
       const addr = note.shipping_address ? JSON.parse(note.shipping_address) : {}
       const result = await glsClient.createShipment({
-        ref: note.client_ref || `ALB-${note.id}`,
+        ref: `${note.client_ref || `ALB-${note.id}`}-${Date.now()}`,
         parcels: note.parcels || 1,
         recipient: {
           name: note.odoo_partner_name || 'Cliente',
