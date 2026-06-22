@@ -427,6 +427,21 @@ export default function Deliveries() {
     catch (err) { alert(err.message) }
   }
 
+  async function handlePackingList(id, ref) {
+    try {
+      const token = JSON.parse(localStorage.getItem('wh_user') || '{}')?.token
+      const res = await fetch(`/api/deliveries/${id}/packing-list`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {}
+      })
+      if (!res.ok) throw new Error('Error generando packing list')
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url; a.download = `ALB-${id}-packing-list.pdf`; a.click()
+      URL.revokeObjectURL(url)
+    } catch (err) { alert(err.message) }
+  }
+
   async function handleDeliver(id) {
     try { await api.deliverDelivery(id); load() }
     catch (err) { alert(err.message) }
@@ -837,10 +852,10 @@ export default function Deliveries() {
                         📄 Ver etiqueta PDF
                       </a>
                     )}
-                    <a href={`/api/deliveries/${n.id}/packing-list`} target="_blank" rel="noreferrer"
+                    <button onClick={() => handlePackingList(n.id)}
                       className="inline-flex items-center gap-1.5 bg-green-50 hover:bg-green-100 text-green-700 text-xs font-medium px-3 py-1.5 rounded-md">
                       📦 Packing list
-                    </a>
+                    </button>
                     {n.status !== 'DRAFT' && (
                       <label className="inline-flex items-center gap-1.5 bg-gray-50 hover:bg-gray-100 text-gray-600 text-xs font-medium px-3 py-1.5 rounded-md cursor-pointer">
                         📎 {n.gls_label_url ? 'Reemplazar PDF' : 'Adjuntar PDF'}
