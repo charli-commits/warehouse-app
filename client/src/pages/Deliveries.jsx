@@ -837,6 +837,10 @@ export default function Deliveries() {
                         📄 Ver etiqueta PDF
                       </a>
                     )}
+                    <a href={`/api/deliveries/${n.id}/packing-list`} target="_blank" rel="noreferrer"
+                      className="inline-flex items-center gap-1.5 bg-green-50 hover:bg-green-100 text-green-700 text-xs font-medium px-3 py-1.5 rounded-md">
+                      📦 Packing list
+                    </a>
                     {n.status !== 'DRAFT' && (
                       <label className="inline-flex items-center gap-1.5 bg-gray-50 hover:bg-gray-100 text-gray-600 text-xs font-medium px-3 py-1.5 rounded-md cursor-pointer">
                         📎 {n.gls_label_url ? 'Reemplazar PDF' : 'Adjuntar PDF'}

@@ -500,6 +500,117 @@ router.post('/:id/label', express.raw({ type: 'application/pdf', limit: '10mb' }
 })
 
 // POST /api/deliveries/:id/deliver — SHIPPED → DELIVERED
+// GET /api/deliveries/:id/packing-list — generate packing list PDF
+router.get('/:id/packing-list', async (req, res) => {
+  const id = Number(req.params.id)
+  const note = await prisma.deliveryNote.findUnique({
+    where: { id },
+    include: {
+      lines: { include: { part: { select: { id: true, code: true, name: true, unit: true } } } },
+      createdBy: { select: { name: true } }
+    }
+  })
+  if (!note) return res.status(404).json({ error: 'Albarán no encontrado' })
+
+  const addr = note.shipping_address ? JSON.parse(note.shipping_address) : {}
+  const dateStr = new Date(note.created_at).toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' })
+  const ref = `ALB-${note.id}`
+
+  const buf = await new Promise((resolve, reject) => {
+    const M = 50
+    const PW = 595.28 - M * 2
+    const doc = new PDFKit({ margin: M, size: 'A4' })
+    const chunks = []
+    doc.on('data', c => chunks.push(c))
+    doc.on('end', () => resolve(Buffer.concat(chunks)))
+    doc.on('error', reject)
+
+    // Header
+    doc.fontSize(20).font('Helvetica-Bold').fillColor('#000').text('ALBARÁN DE SALIDA', M, M)
+    doc.fontSize(10).font('Helvetica').fillColor('#666').text(`${ref}  ·  ${dateStr}`, M, M + 28)
+    if (note.client_ref) doc.text(`Ref. pedido: ${note.client_ref}`, M, M + 42)
+    if (note.carrier) doc.text(`Transportista: ${note.carrier}${note.gls_tracking ? `  ·  ${note.gls_tracking}` : ''}`, M, M + (note.client_ref ? 56 : 42))
+
+    // Sender box (left)
+    const boxY = M + 80
+    doc.rect(M, boxY, PW / 2 - 6, 90).fill('#f3f4f6')
+    doc.fontSize(7).font('Helvetica-Bold').fillColor('#888').text('REMITENTE', M + 10, boxY + 8)
+    doc.fontSize(10).font('Helvetica-Bold').fillColor('#111').text('GYM COMPANY RETAIL SL', M + 10, boxY + 20)
+    doc.fontSize(8).font('Helvetica').fillColor('#444')
+      .text('AVDA CORTS CATALANES 8 NAVE 6', M + 10, boxY + 34)
+      .text('08173 SANT CUGAT DEL VALLÈS', M + 10, boxY + 46)
+
+    // Recipient box (right)
+    const rx = M + PW / 2 + 6
+    const rw = PW / 2 - 6
+    doc.rect(rx, boxY, rw, 90).fill('#f3f4f6')
+    doc.fontSize(7).font('Helvetica-Bold').fillColor('#888').text('DESTINATARIO', rx + 10, boxY + 8)
+    doc.fontSize(10).font('Helvetica-Bold').fillColor('#111').text(note.odoo_partner_name || '—', rx + 10, boxY + 20, { width: rw - 20 })
+    doc.fontSize(8).font('Helvetica').fillColor('#444')
+    let ay = boxY + 34
+    if (addr.street) { doc.text(addr.street, rx + 10, ay, { width: rw - 20 }); ay += 12 }
+    if (addr.zip || addr.city) { doc.text(`${addr.zip || ''} ${addr.city || ''}`.trim(), rx + 10, ay, { width: rw - 20 }); ay += 12 }
+    if (addr.country && addr.country !== 'España') { doc.text(addr.country, rx + 10, ay, { width: rw - 20 }); ay += 12 }
+    if (addr.phone) doc.text(`Tel: ${addr.phone}`, rx + 10, ay, { width: rw - 20 })
+
+    doc.y = boxY + 106
+
+    if (note.notes) {
+      doc.fontSize(8).font('Helvetica').fillColor('#555').text(`Notas: ${note.notes}`, M, doc.y, { width: PW })
+      doc.y += 16
+    }
+
+    // Table header
+    const COL_CODE = M + 6
+    const COL_DESC = M + 120
+    const QTY_W = 70
+    const QTY_X = M + PW - QTY_W - 6
+    const DESC_W = QTY_X - COL_DESC - 8
+
+    doc.rect(M, doc.y, PW, 20).fill('#1e3a5f')
+    const th = doc.y + 5
+    doc.fontSize(9).font('Helvetica-Bold').fillColor('#fff')
+      .text('Código',      COL_CODE, th, { width: 110,    lineBreak: false })
+      .text('Descripción', COL_DESC, th, { width: DESC_W, lineBreak: false })
+      .text('Cantidad',    QTY_X,    th, { width: QTY_W,  align: 'right', lineBreak: false })
+    doc.y = th + 20
+
+    let rowBg = false
+    for (const line of note.lines) {
+      if (doc.y > 760) doc.addPage()
+      if (rowBg) doc.rect(M, doc.y, PW, 18).fill('#f9fafb')
+      rowBg = !rowBg
+      const ry = doc.y + 4
+      doc.fontSize(8).font('Helvetica-Bold').fillColor('#333')
+        .text(line.part?.code || '—', COL_CODE, ry, { width: 110, lineBreak: false })
+      doc.font('Helvetica').fillColor('#222')
+        .text(line.part?.name || '—', COL_DESC, ry, { width: DESC_W, lineBreak: false })
+        .text(`${line.quantity} ${line.part?.unit || ''}`, QTY_X, ry, { width: QTY_W, align: 'right', lineBreak: false })
+      doc.y = ry + 18
+    }
+
+    // Footer
+    doc.moveTo(M, doc.y + 6).lineTo(M + PW, doc.y + 6).lineWidth(0.5).stroke('#ccc')
+    doc.y += 16
+    doc.fontSize(8).font('Helvetica').fillColor('#888')
+      .text(`Total bultos: ${note.parcels || 1}  ·  ${note.lines.length} línea(s)  ·  Generado ${new Date().toLocaleDateString('es-ES')}`, M, doc.y, { align: 'center', width: PW })
+
+    // Signature boxes
+    doc.y += 30
+    doc.rect(M, doc.y, PW / 2 - 10, 50).stroke('#ccc')
+    doc.rect(M + PW / 2 + 10, doc.y, PW / 2 - 10, 50).stroke('#ccc')
+    doc.fontSize(7).font('Helvetica').fillColor('#aaa')
+      .text('Firma remitente', M + 5, doc.y + 3)
+      .text('Firma destinatario', M + PW / 2 + 15, doc.y + 3)
+
+    doc.end()
+  })
+
+  res.setHeader('Content-Type', 'application/pdf')
+  res.setHeader('Content-Disposition', `attachment; filename="${ref}-packing-list.pdf"`)
+  res.send(buf)
+})
+
 router.post('/:id/deliver', async (req, res) => {
   const id = Number(req.params.id)
   const note = await prisma.deliveryNote.findUnique({ where: { id } })
