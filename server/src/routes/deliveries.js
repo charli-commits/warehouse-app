@@ -520,7 +520,7 @@ router.get('/:id/packing-list', async (req, res) => {
   const note = await prisma.deliveryNote.findUnique({
     where: { id },
     include: {
-      lines: { include: { part: { select: { id: true, code: true, name: true, unit: true } } } },
+      lines: { include: { part: { select: { id: true, code: true, name: true, unit: true }, include: { locations: { orderBy: { stock: 'desc' } } } } } },
       createdBy: { select: { name: true } }
     }
   })
@@ -576,17 +576,20 @@ router.get('/:id/packing-list', async (req, res) => {
 
     // Table header
     const COL_CODE = M + 6
-    const COL_DESC = M + 120
-    const QTY_W = 70
+    const COL_DESC = M + 110
+    const LOC_W = 100
+    const QTY_W = 55
     const QTY_X = M + PW - QTY_W - 6
-    const DESC_W = QTY_X - COL_DESC - 8
+    const LOC_X = QTY_X - LOC_W - 6
+    const DESC_W = LOC_X - COL_DESC - 8
 
     doc.rect(M, doc.y, PW, 20).fill('#1e3a5f')
     const th = doc.y + 5
     doc.fontSize(9).font('Helvetica-Bold').fillColor('#fff')
-      .text('Código',      COL_CODE, th, { width: 110,    lineBreak: false })
+      .text('Código',      COL_CODE, th, { width: 100,    lineBreak: false })
       .text('Descripción', COL_DESC, th, { width: DESC_W, lineBreak: false })
-      .text('Cantidad',    QTY_X,    th, { width: QTY_W,  align: 'right', lineBreak: false })
+      .text('Ubicación',   LOC_X,    th, { width: LOC_W,  lineBreak: false })
+      .text('Cant.',       QTY_X,    th, { width: QTY_W,  align: 'right', lineBreak: false })
     doc.y = th + 20
 
     let rowBg = false
@@ -595,10 +598,14 @@ router.get('/:id/packing-list', async (req, res) => {
       if (rowBg) doc.rect(M, doc.y, PW, 18).fill('#f9fafb')
       rowBg = !rowBg
       const ry = doc.y + 4
+      const locs = (line.part?.locations || []).filter(l => l.stock > 0).map(l => l.location).join(', ') || '—'
       doc.fontSize(8).font('Helvetica-Bold').fillColor('#333')
-        .text(line.part?.code || '—', COL_CODE, ry, { width: 110, lineBreak: false })
+        .text(line.part?.code || '—', COL_CODE, ry, { width: 100, lineBreak: false })
       doc.font('Helvetica').fillColor('#222')
         .text(line.part?.name || '—', COL_DESC, ry, { width: DESC_W, lineBreak: false })
+      doc.fillColor('#1e3a5f').font('Helvetica-Bold')
+        .text(locs, LOC_X, ry, { width: LOC_W, lineBreak: false })
+      doc.font('Helvetica').fillColor('#222')
         .text(`${line.quantity} ${line.part?.unit || ''}`, QTY_X, ry, { width: QTY_W, align: 'right', lineBreak: false })
       doc.y = ry + 18
     }
