@@ -13,6 +13,7 @@ export default function PartDetail() {
   const [showAdjust, setShowAdjust] = useState(false)
   const [adjustQty, setAdjustQty] = useState('')
   const [adjustNotes, setAdjustNotes] = useState('')
+  const [adjustLoc, setAdjustLoc] = useState('')
   const [adjusting, setAdjusting] = useState(false)
 
   const [uploadingImg, setUploadingImg] = useState(false)
@@ -72,11 +73,12 @@ export default function PartDetail() {
     e.preventDefault()
     setAdjusting(true)
     try {
-      const result = await api.adjustStock(id, Number(adjustQty), adjustNotes, user?.name)
-      setPart(p => ({ ...p, stock_current: result.part.stock_current, movements: [result.movement, ...p.movements] }))
+      const result = await api.adjustStock(id, Number(adjustQty), adjustNotes, user?.name, adjustLoc || null)
+      setPart(p => ({ ...p, stock_current: result.part.stock_current, locations: result.part.locations, movements: [result.movement, ...(p.movements || [])] }))
       setShowAdjust(false)
       setAdjustQty('')
       setAdjustNotes('')
+      setAdjustLoc('')
     } catch (err) {
       alert(err.message)
     } finally {
@@ -565,6 +567,19 @@ export default function PartDetail() {
                 onChange={e => setAdjustQty(e.target.value)}
                 className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                 placeholder="Ej: 10 o -5" />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Ubicación</label>
+              <select value={adjustLoc} onChange={e => setAdjustLoc(e.target.value)}
+                className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <option value="">Sin ubicación</option>
+                {(part.locations || []).map(l => (
+                  <option key={l.location} value={l.location}>{l.location}</option>
+                ))}
+                {allLocations.filter(l => !(part.locations || []).find(pl => pl.location === l)).map(l => (
+                  <option key={l} value={l}>{l}</option>
+                ))}
+              </select>
             </div>
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">Notas</label>

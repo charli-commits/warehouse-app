@@ -605,19 +605,27 @@ router.post('/:id/transfer', async (req, res) => {
 })
 
 router.post('/:id/adjust', async (req, res) => {
-  const { quantity, notes, user_name } = req.body
+  const { quantity, notes, user_name, location } = req.body
   const id = Number(req.params.id)
   if (typeof quantity !== 'number') return res.status(400).json({ error: 'quantity required' })
 
   const part = await prisma.part.findUnique({ where: { id } })
   if (!part) return res.status(404).json({ error: 'Part not found' })
 
-  const [updated, movement] = await prisma.$transaction([
-    prisma.part.update({
-      where: { id },
-      data: { stock_current: { increment: quantity } }
-    }),
-    prisma.stockMovement.create({
+  let movement
+  await prisma.$transaction(async (tx) => {
+    if (location) {
+      await tx.partLocation.upsert({
+        where: { part_id_location: { part_id: id, location } },
+        update: { stock: { increment: quantity } },
+        create: { part_id: id, location, stock: quantity }
+      })
+      const agg = await tx.partLocation.aggregate({ where: { part_id: id }, _sum: { stock: true } })
+      await tx.part.update({ where: { id }, data: { stock_current: agg._sum.stock || 0 } })
+    } else {
+      await tx.part.update({ where: { id }, data: { stock_current: { increment: quantity } } })
+    }
+    movement = await tx.stockMovement.create({
       data: {
         part_id: id,
         type: quantity >= 0 ? 'IN' : 'OUT',
@@ -627,7 +635,12 @@ router.post('/:id/adjust', async (req, res) => {
         user_name: user_name || null
       }
     })
-  ])
+  })
+
+  const updated = await prisma.part.findUnique({
+    where: { id },
+    include: { locations: { orderBy: { location: 'asc' } } }
+  })
   res.json({ part: updated, movement })
 })
 
