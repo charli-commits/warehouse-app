@@ -161,18 +161,17 @@ router.get('/', async (req, res) => {
     return res.json({ data: enriched.slice(start, start + pageSize), total, page, page_size: pageSize })
   }
 
-  const naturalSort = (a, b) => a.code.localeCompare(b.code, undefined, { numeric: true, sensitivity: 'base' })
-
   if (low_stock === 'true') {
-    const all = await prisma.part.findMany({ where, include })
-    const filtered = all.filter(p => p.stock_current <= p.stock_min).sort(naturalSort)
+    const all = await prisma.part.findMany({ where, include, orderBy: { code: 'asc' } })
+    const filtered = all.filter(p => p.stock_current <= p.stock_min)
     const total = filtered.length
     const start = (page - 1) * pageSize
     return res.json({ data: filtered.slice(start, start + pageSize), total, page, page_size: pageSize })
   }
 
-  const [all, incomingAgg] = await Promise.all([
-    prisma.part.findMany({ where, include }),
+  const [data, total, incomingAgg] = await Promise.all([
+    prisma.part.findMany({ where, include, orderBy: { code: 'asc' }, skip: (page - 1) * pageSize, take: pageSize }),
+    prisma.part.count({ where }),
     prisma.purchaseOrderLine.groupBy({
       by: ['part_id'],
       where: { order: { status: { in: ['DRAFT', 'SENT', 'LOCATING', 'PARTIAL'] } } },
@@ -183,10 +182,9 @@ router.get('/', async (req, res) => {
   for (const a of incomingAgg) {
     incomingMap[a.part_id] = Math.max(0, (a._sum.quantity_ordered || 0) - (a._sum.quantity_received || 0))
   }
-  const sorted = all.map(p => ({ ...p, stock_incoming: incomingMap[p.id] || 0 })).sort(naturalSort)
-  const total = sorted.length
-  const start = (page - 1) * pageSize
-  res.json({ data: sorted.slice(start, start + pageSize), total, page, page_size: pageSize })
+  const naturalSort = (a, b) => a.code.localeCompare(b.code, undefined, { numeric: true, sensitivity: 'base' })
+  const page_data = data.map(p => ({ ...p, stock_incoming: incomingMap[p.id] || 0 })).sort(naturalSort)
+  res.json({ data: page_data, total, page, page_size: pageSize })
 })
 
 // GET /api/parts/locations — all distinct location names (for autocomplete)
