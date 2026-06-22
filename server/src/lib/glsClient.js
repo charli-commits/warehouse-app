@@ -235,7 +235,31 @@ async function createShipment({ recipient, ref, parcels = 1 }) {
     }
   }
 
-  return { tracking: envios.map(e => e.codexp).join(','), labelPdfBuffer }
+  return {
+    tracking: envios.map(e => e.codexp).join(','),
+    codbarras: envios.map(e => e.codbarras).join(','),
+    labelPdfBuffer,
+  }
+}
+
+// Cancel shipment by codbarras — only works before pickup
+async function borraServicios(codbarras) {
+  if (!isConfigured()) throw new Error('GLS_UID no configurado en .env')
+  const codes = Array.isArray(codbarras) ? codbarras : [codbarras]
+  const enviosXml = codes.map(c => `<Envio codbarras="${esc(c)}"></Envio>`).join('\n    ')
+  const innerXml = `<Servicios uidcliente="${esc(activeUid())}" xmlns="${GLS_NS}">
+    ${enviosXml}
+  </Servicios>`
+  const envelope = soapEnvelope('BorraServicios', innerXml)
+  const raw = await postSoap(envelope, `${GLS_NS}BorraServicios`)
+  const retMatch = raw.match(/return="(-?\d+)"/i)
+  const errors = [...raw.matchAll(/<Error[^>]*>([\s\S]*?)<\/Error>/gi)].map(m => m[1].trim()).filter(Boolean)
+  if (retMatch && retMatch[1] !== '0') {
+    const msg = errors.length ? errors.join(' | ') : `código ${retMatch[1]}`
+    throw new Error(`GLS: ${msg}`)
+  }
+  if (errors.length) throw new Error(`GLS: ${errors.join(' | ')}`)
+  return true
 }
 
 // Cierre de jornada — llama a CierreAgencia para comunicar fin de recogidas del día
@@ -259,4 +283,4 @@ async function cierreJornada() {
   return { pdfBuffer: b64Match ? Buffer.from(b64Match[1].trim(), 'base64') : null }
 }
 
-module.exports = { createShipment, cierreJornada, isConfigured, activeUid }
+module.exports = { createShipment, borraServicios, cierreJornada, isConfigured, activeUid }

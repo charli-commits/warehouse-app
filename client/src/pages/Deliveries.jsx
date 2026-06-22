@@ -432,6 +432,15 @@ export default function Deliveries() {
     catch (err) { alert(err.message) }
   }
 
+  async function handleCancelGls(id) {
+    if (!confirm('¿Anular el envío GLS? Esto cancelará la recogida en GLS y volverá el albarán a estado READY.')) return
+    try {
+      const updated = await api.cancelGlsShipment(id)
+      load()
+      setDetailNote(updated)
+    } catch (err) { alert(err.message) }
+  }
+
   const [detailNote, setDetailNote] = useState(null)
   const [clientHistory, setClientHistory] = useState([])
   const [showHistory, setShowHistory] = useState(false)
@@ -951,6 +960,12 @@ export default function Deliveries() {
                   <button onClick={() => { handleDeliver(n.id); setDetailNote(null) }}
                     className="w-full bg-green-600 hover:bg-green-700 text-white text-sm font-medium py-2 rounded-md">
                     Marcar entregado
+                  </button>
+                )}
+                {n.status === 'SHIPPED' && n.carrier === 'GLS' && n.gls_codbarras && (
+                  <button onClick={() => handleCancelGls(n.id)}
+                    className="w-full border border-red-300 text-red-500 hover:bg-red-50 text-sm font-medium py-2 rounded-md">
+                    Anular envío GLS
                   </button>
                 )}
                 {!['SHIPPED','DELIVERED'].includes(n.status) && (

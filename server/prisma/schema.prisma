@@ -138,6 +138,7 @@ model DeliveryNote {
   carrier           String?  // empresa de transporte: GLS, DACHSER...
   parcels           Int      @default(1)
   gls_tracking      String?  // tracking number (comma-separated when multi-bulto)
+  gls_codbarras     String?  // internal GLS barcode(s), needed for BorraServicios cancellation
   gls_label_url     String?
   created_by_id     Int?
   created_at        DateTime @default(now())

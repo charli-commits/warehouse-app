@@ -393,6 +393,7 @@ router.post('/:id/ship', async (req, res) => {
   if (!['CONFIRMED', 'READY'].includes(note.status)) return res.status(409).json({ error: 'Solo albaranes CONFIRMED o READY pueden enviarse' })
 
   let gls_tracking = null
+  let gls_codbarras = null
   let gls_label_url = note.gls_label_url || null
 
   if (carrier === 'GLS' && glsClient.isConfigured()) {
@@ -413,6 +414,7 @@ router.post('/:id/ship', async (req, res) => {
         }
       })
       gls_tracking = result.tracking
+      gls_codbarras = result.codbarras || null
       if (result.labelPdfBuffer) {
         const filename = `ALB-${note.id}-${result.tracking}.pdf`
         fs.writeFileSync(path.join(LABELS_DIR, filename), result.labelPdfBuffer)
@@ -430,12 +432,37 @@ router.post('/:id/ship', async (req, res) => {
       status: 'SHIPPED',
       carrier: carrier || null,
       gls_tracking,
+      gls_codbarras,
       gls_label_url,
     },
     include: {
       lines: { include: { part: { select: { id: true, code: true, name: true, unit: true } } } }
     }
   })
+  res.json(updated)
+})
+
+// POST /api/deliveries/:id/cancel-gls — cancel GLS shipment via BorraServicios, revert to READY
+router.post('/:id/cancel-gls', async (req, res) => {
+  const id = Number(req.params.id)
+  const note = await prisma.deliveryNote.findUnique({ where: { id } })
+  if (!note) return res.status(404).json({ error: 'Albarán no encontrado' })
+  if (note.status !== 'SHIPPED') return res.status(409).json({ error: 'Solo se pueden anular albaranes en estado SHIPPED' })
+  if (!note.gls_codbarras) return res.status(409).json({ error: 'Este albarán no tiene codbarras GLS guardado — no se puede anular por API' })
+
+  try {
+    const codes = note.gls_codbarras.split(',').map(s => s.trim()).filter(Boolean)
+    await glsClient.borraServicios(codes)
+  } catch (err) {
+    return res.status(422).json({ error: 'GLS rechazó la anulación: ' + err.message })
+  }
+
+  const updated = await prisma.deliveryNote.update({
+    where: { id },
+    data: { status: 'READY', gls_tracking: null, gls_codbarras: null },
+    include: { lines: { include: { part: { select: { id: true, code: true, name: true, unit: true } } } } }
+  })
+  await prisma.deliveryNoteEvent.create({ data: { delivery_note_id: id, status: 'READY', notes: 'Envío GLS anulado' } })
   res.json(updated)
 })
 
