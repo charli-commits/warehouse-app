@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef } from 'react'
-import { useParams, Link } from 'react-router-dom'
+import { useParams, Link, useNavigate } from 'react-router-dom'
 import { api } from '../lib/api'
 import { useAuth } from '../lib/AuthContext'
 import StockBadge from '../components/ui/StockBadge'
@@ -7,6 +7,7 @@ import Modal from '../components/ui/Modal'
 
 export default function PartDetail() {
   const { id } = useParams()
+  const navigate = useNavigate()
   const { user } = useAuth()
   const [part, setPart] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -220,7 +221,7 @@ export default function PartDetail() {
   return (
     <div className="p-4 md:p-8 max-w-4xl">
       <div className="flex items-center gap-3 mb-6">
-        <Link to="/parts" className="text-gray-400 hover:text-gray-700 text-sm">← Piezas</Link>
+        <button onClick={() => navigate(-1)} className="text-gray-400 hover:text-gray-700 text-sm">← Piezas</button>
         <span className="text-gray-300">/</span>
         <span className="font-medium">{part.code}</span>
       </div>
