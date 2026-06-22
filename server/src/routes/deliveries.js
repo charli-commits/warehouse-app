@@ -520,11 +520,36 @@ router.get('/:id/packing-list', async (req, res) => {
   const note = await prisma.deliveryNote.findUnique({
     where: { id },
     include: {
-      lines: { include: { part: { select: { id: true, code: true, name: true, unit: true }, include: { locations: { orderBy: { stock: 'desc' } } } } } },
+      lines: { include: { part: { select: { id: true, code: true, name: true, unit: true } } } },
       createdBy: { select: { name: true } }
     }
   })
   if (!note) return res.status(404).json({ error: 'Albarán no encontrado' })
+
+  // FIFO location for each part: oldest lot with stock > 0
+  const partIds = note.lines.map(l => l.part_id).filter(Boolean)
+  const fifoLocs = {}
+  if (partIds.length) {
+    const lotLocs = await prisma.lotLocation.findMany({
+      where: { stock: { gt: 0 }, lot: { part_id: { in: partIds } } },
+      include: { lot: { select: { part_id: true, created_at: true } } },
+      orderBy: { lot: { created_at: 'asc' } }
+    })
+    for (const ll of lotLocs) {
+      if (!fifoLocs[ll.lot.part_id]) fifoLocs[ll.lot.part_id] = ll.location
+    }
+    // fallback: parts with no lots — use PartLocation with most stock
+    const noLot = partIds.filter(pid => !fifoLocs[pid])
+    if (noLot.length) {
+      const partLocs = await prisma.partLocation.findMany({
+        where: { part_id: { in: noLot }, stock: { gt: 0 } },
+        orderBy: { stock: 'desc' }
+      })
+      for (const pl of partLocs) {
+        if (!fifoLocs[pl.part_id]) fifoLocs[pl.part_id] = pl.location
+      }
+    }
+  }
 
   const addr = note.shipping_address ? JSON.parse(note.shipping_address) : {}
   const dateStr = new Date(note.created_at).toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' })
@@ -598,7 +623,7 @@ router.get('/:id/packing-list', async (req, res) => {
       if (rowBg) doc.rect(M, doc.y, PW, 18).fill('#f9fafb')
       rowBg = !rowBg
       const ry = doc.y + 4
-      const locs = (line.part?.locations || []).filter(l => l.stock > 0).map(l => l.location).join(', ') || '—'
+      const locs = fifoLocs[line.part_id] || '—'
       doc.fontSize(8).font('Helvetica-Bold').fillColor('#333')
         .text(line.part?.code || '—', COL_CODE, ry, { width: 100, lineBreak: false })
       doc.font('Helvetica').fillColor('#222')
