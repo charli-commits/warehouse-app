@@ -56,7 +56,7 @@ function PartnerSearch({ value, valueName, valueAddress, onSelect }) {
   function select(p) {
     setQuery(p?.name || '')
     // If matched via order ref, pass back the order ref too
-    const orderRef = p?.matched_orders?.[0] || null
+    const orderRef = p?.matched_orders?.length ? p.matched_orders.join(', ') : null
     onSelect(p ? { ...p, _orderRef: orderRef } : null)
     setOpen(false)
   }
