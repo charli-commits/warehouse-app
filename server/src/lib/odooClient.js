@@ -305,8 +305,8 @@ async function findPartnersByOrderRef(query) {
   if (!query || query.length < 3) return []
   const orders = await odoo(
     'sale.order', 'search_read',
-    [['name', 'ilike', query]],
-    ['id', 'name', 'partner_id', 'partner_shipping_id'],
+    [['|', ['name', 'ilike', query], ['client_order_ref', 'ilike', query]]],
+    ['id', 'name', 'client_order_ref', 'partner_id', 'partner_shipping_id'],
     { limit: 20 }
   )
   // Use partner_shipping_id (delivery address) falling back to partner_id (billing)
@@ -325,7 +325,11 @@ async function findPartnersByOrderRef(query) {
   for (const o of orders) {
     const pid = o.partner_shipping_id?.[0] || o.partner_id?.[0]
     if (!pid) continue
-    ;(ordersByPartner[pid] = ordersByPartner[pid] || []).push(o.name)
+    const refs = [o.name, o.client_order_ref].filter(Boolean)
+    for (const r of refs) {
+      if (!(ordersByPartner[pid] = ordersByPartner[pid] || []).includes(r))
+        ordersByPartner[pid].push(r)
+    }
   }
   return partners.map(p => ({ ...p, matched_orders: ordersByPartner[p.id] || [] }))
 }
