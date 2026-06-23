@@ -43,12 +43,16 @@ router.post('/sync', async (req, res) => {
     for (const s of odooSuppliers) {
       const name = (s.name || '').trim()
       if (!name) continue
-      await prisma.supplier.upsert({
-        where: { odoo_partner_id: s.id },
-        update: { name, email: s.email || null, phone: s.phone || null },
-        create: { name, email: s.email || null, phone: s.phone || null, odoo_partner_id: s.id },
-      })
-      suppliersUpserted++
+      try {
+        await prisma.supplier.upsert({
+          where: { odoo_partner_id: s.id },
+          update: { name, email: s.email || null, phone: s.phone || null },
+          create: { name, email: s.email || null, phone: s.phone || null, odoo_partner_id: s.id },
+        })
+        suppliersUpserted++
+      } catch {
+        // skip duplicate name — manually created supplier with same name already exists
+      }
     }
 
     res.json({
