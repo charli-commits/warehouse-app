@@ -166,8 +166,17 @@ async function grabaServicios(recipient, ref, parcels = 1) {
     throw new Error(`GLS: ${msg}`)
   }
 
-  // codbarras (618...) = internal barcode used for PDF; codexp (10 digits) = public tracking number
-  const envios = [...raw.matchAll(/codbarras="([^"]+)"[^>]*codexp="([^"]+)"/gi)].map(m => ({ codbarras: m[1], codexp: m[2] }))
+  // Log all Envio attributes to help identify international tracking field
+  const envioMatches = [...raw.matchAll(/<Envio([^>]+)>/gi)]
+  envioMatches.forEach(m => console.log('[GLS] Envio attrs:', m[1]))
+
+  // codbarras (618...) = internal barcode; codexp = domestic tracking; check for international tracking fields
+  const envios = [...raw.matchAll(/codbarras="([^"]+)"[^>]*codexp="([^"]+)"/gi)].map(m => {
+    const attrs = m[0]
+    // Try to extract international tracking (Eurobusiness) from additional fields
+    const intlMatch = attrs.match(/(?:codUnicoExp|codRef|uid|uidexp)="([^"]+)"/i)
+    return { codbarras: m[1], codexp: intlMatch?.[1] || m[2] }
+  })
   if (envios.length === 0) {
     const msg = errors.length ? errors.join(' | ') : 'respuesta inesperada del servidor GLS'
     throw new Error(`GLS: ${msg}`)
