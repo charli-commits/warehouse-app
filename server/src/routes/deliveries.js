@@ -10,6 +10,26 @@ const PDFKit = require('pdfkit')
 const LABELS_DIR = path.join(__dirname, '..', '..', 'uploads', 'gls_labels')
 fs.mkdirSync(LABELS_DIR, { recursive: true })
 
+const SUPABASE_URL = process.env.SUPABASE_URL || 'https://wtpaggzdwhpxxtatcpxo.supabase.co'
+const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY || ''
+
+async function uploadLabelToSupabase(filename, buffer) {
+  const res = await fetch(`${SUPABASE_URL}/storage/v1/object/labels/${filename}`, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${SUPABASE_KEY}`,
+      'Content-Type': 'application/pdf',
+      'x-upsert': 'true',
+    },
+    body: buffer,
+  })
+  if (!res.ok) {
+    const text = await res.text()
+    throw new Error(`Supabase upload error ${res.status}: ${text}`)
+  }
+  return `${SUPABASE_URL}/storage/v1/object/public/labels/${filename}`
+}
+
 // Map Spanish/Odoo country names → ISO 2-letter codes
 const COUNTRY_NAME_TO_ISO = {
   'españa': 'ES', 'spain': 'ES',
@@ -417,8 +437,13 @@ router.post('/:id/ship', async (req, res) => {
       gls_codbarras = result.codbarras || null
       if (result.labelPdfBuffer) {
         const filename = `ALB-${note.id}-${result.tracking}.pdf`
-        fs.writeFileSync(path.join(LABELS_DIR, filename), result.labelPdfBuffer)
-        gls_label_url = `/uploads/gls_labels/${filename}`
+        try {
+          gls_label_url = await uploadLabelToSupabase(filename, result.labelPdfBuffer)
+        } catch {
+          // fallback to local if Supabase fails
+          fs.writeFileSync(path.join(LABELS_DIR, filename), result.labelPdfBuffer)
+          gls_label_url = `/uploads/gls_labels/${filename}`
+        }
       }
     } catch (err) {
       return res.status(422).json({ error: 'Error GLS: ' + err.message })
@@ -502,8 +527,13 @@ router.post('/:id/label', express.raw({ type: 'application/pdf', limit: '10mb' }
   if (!req.body || !req.body.length) return res.status(400).json({ error: 'PDF vacío' })
 
   const filename = `ALB-${id}-manual-${Date.now()}.pdf`
-  fs.writeFileSync(path.join(LABELS_DIR, filename), req.body)
-  const gls_label_url = `/uploads/gls_labels/${filename}`
+  let gls_label_url
+  try {
+    gls_label_url = await uploadLabelToSupabase(filename, req.body)
+  } catch {
+    fs.writeFileSync(path.join(LABELS_DIR, filename), req.body)
+    gls_label_url = `/uploads/gls_labels/${filename}`
+  }
 
   const updated = await prisma.deliveryNote.update({
     where: { id },
