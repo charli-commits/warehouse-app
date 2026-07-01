@@ -95,12 +95,21 @@ router.get('/', async (req, res) => {
 // GET /api/deliveries/resumen-cierre — PDF resumen de albaranes SHIPPED
 router.get('/resumen-cierre', async (req, res) => {
   try {
+    const { date } = req.query
+    let where = { status: 'SHIPPED' }
+    if (date) {
+      const start = new Date(date)
+      start.setHours(0, 0, 0, 0)
+      const end = new Date(date)
+      end.setHours(23, 59, 59, 999)
+      where.shipped_at = { gte: start, lte: end }
+    }
     const notes = await prisma.deliveryNote.findMany({
-      where: { status: 'SHIPPED' },
+      where,
       include: { lines: { include: { part: { select: { code: true, name: true, unit: true } } } } },
       orderBy: { created_at: 'desc' }
     })
-    if (notes.length === 0) return res.status(404).json({ error: 'No hay albaranes enviados' })
+    if (notes.length === 0) return res.status(404).json({ error: date ? `No hay albaranes enviados el ${date}` : 'No hay albaranes enviados' })
     const pdfBuf = await buildResumenPDF(notes)
     const filename = `resumen-${new Date().toISOString().slice(0, 10)}.pdf`
     res.setHeader('Content-Type', 'application/pdf')
@@ -407,7 +416,7 @@ router.post('/:id/close-picking', async (req, res) => {
 // carrier=DACHSER (or other): marks shipped immediately, tracking can be added later
 router.post('/:id/ship', async (req, res) => {
   const id = Number(req.params.id)
-  const { carrier } = req.body
+  const { carrier, retorno } = req.body
   const note = await prisma.deliveryNote.findUnique({ where: { id } })
   if (!note) return res.status(404).json({ error: 'Delivery note not found' })
   if (!['CONFIRMED', 'READY'].includes(note.status)) return res.status(409).json({ error: 'Solo albaranes CONFIRMED o READY pueden enviarse' })
@@ -422,6 +431,7 @@ router.post('/:id/ship', async (req, res) => {
       const result = await glsClient.createShipment({
         ref: `${note.client_ref || `ALB-${note.id}`}-${Date.now()}`,
         parcels: note.parcels || 1,
+        retorno: retorno ? 1 : 0,
         recipient: {
           name: note.odoo_partner_name || 'Cliente',
           address: addr.street || '',
@@ -455,6 +465,7 @@ router.post('/:id/ship', async (req, res) => {
     where: { id },
     data: {
       status: 'SHIPPED',
+      shipped_at: new Date(),
       carrier: carrier || null,
       gls_tracking,
       gls_codbarras,

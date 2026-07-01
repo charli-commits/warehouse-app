@@ -364,6 +364,7 @@ export default function Deliveries() {
   const [shippingId, setShippingId] = useState(null)
   const [shipCarrier, setShipCarrier] = useState('')
   const [shipParcels, setShipParcels] = useState(1)
+  const [shipRetorno, setShipRetorno] = useState(false)
   const [editTrackingId, setEditTrackingId] = useState(null)
   const [editTrackingVal, setEditTrackingVal] = useState('')
   const [users, setUsers] = useState([])
@@ -406,8 +407,8 @@ export default function Deliveries() {
   async function handleShip(id, carrier) {
     try {
       if (shipParcels > 1) await api.updateDelivery(id, { parcels: shipParcels })
-      await api.shipDelivery(id, { carrier })
-      setShippingId(null); setShipCarrier(''); setShipParcels(1)
+      await api.shipDelivery(id, { carrier, retorno: carrier === 'GLS' ? shipRetorno : false })
+      setShippingId(null); setShipCarrier(''); setShipParcels(1); setShipRetorno(false)
       load()
     }
     catch (err) { alert(err.message) }
@@ -470,6 +471,8 @@ export default function Deliveries() {
   const [showHistory, setShowHistory] = useState(false)
   const [activeTab, setActiveTab] = useState('ALL')
   const [search, setSearch] = useState('')
+  const [showResumenModal, setShowResumenModal] = useState(false)
+  const [resumenDate, setResumenDate] = useState(new Date().toISOString().slice(0, 10))
 
   async function handleEtiquetasPdf() {
     try {
@@ -483,13 +486,23 @@ export default function Deliveries() {
   }
 
   async function handleResumenCierre() {
+    setShowResumenModal(true)
+  }
+
+  async function downloadResumen() {
     try {
       const token = JSON.parse(localStorage.getItem('wh_user') || '{}')?.token
-      const res = await fetch('/api/deliveries/resumen-cierre', { headers: { Authorization: `Bearer ${token}` } })
-      if (!res.ok) { alert('Error al generar resumen'); return }
+      const res = await fetch(`/api/deliveries/resumen-cierre?date=${resumenDate}`, { headers: { Authorization: `Bearer ${token}` } })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        alert(err.error || 'Error al generar resumen')
+        return
+      }
       const blob = await res.blob()
       const url = URL.createObjectURL(blob)
-      window.open(url, '_blank')
+      const a = document.createElement('a')
+      a.href = url; a.download = `resumen-${resumenDate}.pdf`; a.click()
+      setShowResumenModal(false)
     } catch (err) { alert('Error: ' + err.message) }
   }
 
@@ -586,12 +599,16 @@ export default function Deliveries() {
                       onChange={e => setShipParcels(Math.max(1, Number(e.target.value)))}
                       className="w-12 border border-gray-300 rounded px-1.5 py-1 text-xs text-center" />
                   </div>
+                  <label className="flex items-center gap-1.5 text-xs text-gray-500 cursor-pointer">
+                    <input type="checkbox" checked={shipRetorno} onChange={e => setShipRetorno(e.target.checked)} className="rounded" />
+                    Con retorno
+                  </label>
                   <div className="flex gap-1.5 items-center">
                     <button onClick={() => handleShip(note.id, 'GLS')}
                       className="bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold px-3 py-1.5 rounded-md">GLS</button>
                     <button onClick={() => handleShip(note.id, 'DACHSER')}
                       className="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold px-3 py-1.5 rounded-md">DACHSER</button>
-                    <button onClick={() => { setShippingId(null); setShipParcels(1) }} className="text-gray-400 text-xs">✕</button>
+                    <button onClick={() => { setShippingId(null); setShipParcels(1); setShipRetorno(false) }} className="text-gray-400 text-xs">✕</button>
                   </div>
                 </div>
               )}
@@ -790,12 +807,16 @@ export default function Deliveries() {
                           onChange={e => setShipParcels(Math.max(1, Number(e.target.value)))}
                           className="w-12 border border-gray-300 rounded px-1.5 py-1 text-xs text-center" />
                       </div>
+                      <label className="flex items-center gap-1.5 text-xs text-gray-500 cursor-pointer">
+                        <input type="checkbox" checked={shipRetorno} onChange={e => setShipRetorno(e.target.checked)} className="rounded" />
+                        Con retorno
+                      </label>
                       <div className="flex gap-1.5">
                         <button onClick={() => handleShip(note.id, 'GLS')}
                           className="bg-purple-600 text-white text-xs font-bold px-2.5 py-1.5 rounded-md">GLS</button>
                         <button onClick={() => handleShip(note.id, 'DACHSER')}
                           className="bg-indigo-600 text-white text-xs font-bold px-2.5 py-1.5 rounded-md">DACHSER</button>
-                        <button onClick={() => { setShippingId(null); setShipParcels(1) }} className="text-gray-400 text-xs px-1">✕</button>
+                        <button onClick={() => { setShippingId(null); setShipParcels(1); setShipRetorno(false) }} className="text-gray-400 text-xs px-1">✕</button>
                       </div>
                     </div>
                   )}
@@ -1019,6 +1040,26 @@ export default function Deliveries() {
         <Modal title={editing ? `Editar ALB-${editing.id}` : 'Nuevo albarán'}
           onClose={() => { setShowForm(false); setEditing(null) }} size="lg">
           <DeliveryForm initial={editing} onSave={handleSave} onCancel={() => { setShowForm(false); setEditing(null) }} />
+        </Modal>
+      )}
+      {showResumenModal && (
+        <Modal title="Resumen de envíos" onClose={() => setShowResumenModal(false)}>
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Fecha de envío</label>
+              <input
+                type="date"
+                value={resumenDate}
+                onChange={e => setResumenDate(e.target.value)}
+                className="border rounded px-3 py-2 text-sm w-full"
+              />
+            </div>
+            <p className="text-xs text-gray-500">Se incluirán todos los albaranes marcados como enviados en esa fecha.</p>
+            <div className="flex gap-2 justify-end">
+              <button onClick={() => setShowResumenModal(false)} className="px-4 py-2 text-sm border rounded hover:bg-gray-50">Cancelar</button>
+              <button onClick={downloadResumen} className="px-4 py-2 text-sm bg-blue-600 text-white rounded hover:bg-blue-700">Descargar PDF</button>
+            </div>
+          </div>
         </Modal>
       )}
     </div>

@@ -141,6 +141,7 @@ model DeliveryNote {
   gls_tracking      String?  // tracking number (comma-separated when multi-bulto)
   gls_codbarras     String?  // internal GLS barcode(s), needed for BorraServicios cancellation
   gls_label_url     String?
+  shipped_at        DateTime?
   created_by_id     Int?
   created_at        DateTime @default(now())
 
