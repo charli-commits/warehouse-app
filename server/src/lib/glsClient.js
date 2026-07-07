@@ -66,7 +66,7 @@ function glsCountryCode(iso) {
   return GLS_COUNTRY_CODES[(iso || 'ES').toUpperCase()] ?? 34
 }
 
-function buildShipmentXml({ recipient, ref, fecha, parcels = 1 }) {
+function buildShipmentXml({ recipient, ref, fecha, parcels = 1, retorno = 0 }) {
   const dateStr = fecha || new Date().toLocaleDateString('es-ES', { day:'2-digit', month:'2-digit', year:'numeric' })
   const isInternational = recipient.country && recipient.country.toUpperCase() !== 'ES'
   const servicio = isInternational ? 74 : 96
@@ -79,7 +79,7 @@ function buildShipmentXml({ recipient, ref, fecha, parcels = 1 }) {
     <Horario>${horario}</Horario>
     <Bultos>${Math.max(1, parcels)}</Bultos>
     <Peso>1</Peso>
-    <Retorno>0</Retorno>
+    <Retorno>${retorno}</Retorno>
     <Pod>N</Pod>
     <Remite>
       <Plaza></Plaza>
@@ -153,8 +153,8 @@ function postSoap(xmlBody, soapAction) {
 }
 
 // Step 1: create shipment → returns array of { codbarras, codexp }
-async function grabaServicios(recipient, ref, parcels = 1) {
-  const innerXml = buildShipmentXml({ recipient, ref, parcels })
+async function grabaServicios(recipient, ref, parcels = 1, retorno = 0) {
+  const innerXml = buildShipmentXml({ recipient, ref, parcels, retorno })
   const envelope = soapEnvelope('GrabaServicios', innerXml)
   const raw = await postSoap(envelope, `${GLS_NS}GrabaServicios`)
 
@@ -173,8 +173,8 @@ async function grabaServicios(recipient, ref, parcels = 1) {
   // codbarras (618...) = internal barcode; codexp = domestic tracking; check for international tracking fields
   const envios = [...raw.matchAll(/codbarras="([^"]+)"[^>]*codexp="([^"]+)"/gi)].map(m => {
     const attrs = m[0]
-    // Try to extract international tracking (Eurobusiness) from additional fields
-    const intlMatch = attrs.match(/(?:codUnicoExp|codRef|uid|uidexp)="([^"]+)"/i)
+    // For international Eurobusiness, tracking may be in a different field (uid is always a UUID, not tracking)
+    const intlMatch = attrs.match(/(?:codUnicoExp|codBarrasExt|trackId|codRuta)="([^"]+)"/i)
     return { codbarras: m[1], codexp: intlMatch?.[1] || m[2] }
   })
   if (envios.length === 0) {
@@ -208,7 +208,7 @@ async function etiquetaEnvio(codbarras) {
 
 // Public — creates shipment + fetches label PDFs, merges into one buffer
 // Returns { tracking: string (comma-separated), labelPdfBuffer: Buffer }
-async function createShipment({ recipient, ref, parcels = 1 }) {
+async function createShipment({ recipient, ref, parcels = 1, retorno = 0 }) {
   if (!isConfigured()) throw new Error('GLS_UID no configurado en .env')
   if (!recipient.zip || recipient.zip.length < 4)
     throw new Error('Falta el código postal del destinatario. Edita la dirección del albarán antes de generar la etiqueta GLS.')
@@ -217,7 +217,7 @@ async function createShipment({ recipient, ref, parcels = 1 }) {
   if (!recipient.address)
     throw new Error('Falta la dirección del destinatario.')
 
-  const envios = await grabaServicios(recipient, ref, parcels)
+  const envios = await grabaServicios(recipient, ref, parcels, retorno)
   const labelBuffers = []
   for (const { codbarras } of envios) {
     try {
