@@ -166,23 +166,15 @@ async function grabaServicios(recipient, ref, parcels = 1, retorno = 0) {
     throw new Error(`GLS: ${msg}`)
   }
 
-  // Log all Envio attributes parsed as key=value to identify international tracking field
-  const envioMatches = [...raw.matchAll(/<Envio([^>]+)>/gi)]
-  envioMatches.forEach(m => {
-    const pairs = {}
-    const attrRx = /(\w+)="([^"]*)"/g
-    let a
-    while ((a = attrRx.exec(m[1])) !== null) pairs[a[1]] = a[2]
-    console.log('[GLS] Envio fields:', JSON.stringify(pairs))
-  })
+  // International Eurobusiness tracking is in <Referencia tipo="G"> (not in Envio attributes)
+  const tipoGMatch = raw.match(/<Referencia tipo="G">([^<]+)<\/Referencia>/i)
+  const intlTracking = tipoGMatch ? tipoGMatch[1].trim() : null
+  if (intlTracking) console.log('[GLS] International tracking (tipo G):', intlTracking)
 
-  // codbarras (618...) = internal barcode; codexp = domestic tracking; check for international tracking fields
-  const envios = [...raw.matchAll(/codbarras="([^"]+)"[^>]*codexp="([^"]+)"/gi)].map(m => {
-    const attrs = m[0]
-    // For international Eurobusiness, tracking may be in a different field (uid is always a UUID, not tracking)
-    const intlMatch = attrs.match(/(?:codUnicoExp|codBarrasExt|trackId|codRuta)="([^"]+)"/i)
-    return { codbarras: m[1], codexp: intlMatch?.[1] || m[2] }
-  })
+  const envios = [...raw.matchAll(/codbarras="([^"]+)"[^>]*codexp="([^"]+)"/gi)].map(m => ({
+    codbarras: m[1],
+    codexp: intlTracking || m[2],
+  }))
   if (envios.length === 0) {
     const msg = errors.length ? errors.join(' | ') : 'respuesta inesperada del servidor GLS'
     throw new Error(`GLS: ${msg}`)
