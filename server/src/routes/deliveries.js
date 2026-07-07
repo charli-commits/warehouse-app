@@ -242,7 +242,7 @@ router.delete('/:id', async (req, res) => {
   res.json({ ok: true })
 })
 
-// POST /api/deliveries/:id/confirm — DRAFT → CONFIRMED, discounts stock
+// POST /api/deliveries/:id/confirm — DRAFT → CONFIRMED (stock NOT decremented here, happens at picking/ship)
 router.post('/:id/confirm', async (req, res) => {
   const id = Number(req.params.id)
   const note = await prisma.deliveryNote.findUnique({
@@ -263,28 +263,10 @@ router.post('/:id/confirm', async (req, res) => {
     }
   }
 
-  const ops = [
+  await prisma.$transaction([
     prisma.deliveryNote.update({ where: { id }, data: { status: 'CONFIRMED' } }),
     prisma.deliveryNoteEvent.create({ data: { delivery_note_id: id, status: 'CONFIRMED' } }),
-    ...note.lines.flatMap(line => [
-      prisma.part.update({
-        where: { id: line.part_id },
-        data: { stock_current: { decrement: line.quantity } }
-      }),
-      prisma.stockMovement.create({
-        data: {
-          part_id: line.part_id,
-          type: 'OUT',
-          quantity: line.quantity,
-          reference_type: 'DELIVERY',
-          reference_id: id,
-          notes: `Albarán ALB-${id}`,
-        }
-      })
-    ])
-  ]
-
-  await prisma.$transaction(ops)
+  ])
 
   const updated = await prisma.deliveryNote.findUnique({
     where: { id },
@@ -375,9 +357,14 @@ router.post('/:id/verify-line', async (req, res) => {
         }
       }
 
-      // Recalcular stock_current desde PartLocation
-      const agg = await tx.partLocation.aggregate({ where: { part_id }, _sum: { stock: true } })
-      await tx.part.update({ where: { id: part_id }, data: { stock_current: agg._sum.stock || 0 } })
+      if (scanned_location) {
+        // Con ubicación: recalcular stock_current desde PartLocation (ya decrementado arriba)
+        const agg = await tx.partLocation.aggregate({ where: { part_id }, _sum: { stock: true } })
+        await tx.part.update({ where: { id: part_id }, data: { stock_current: agg._sum.stock || 0 } })
+      } else {
+        // Sin ubicación: decrementar stock_current directamente
+        await tx.part.update({ where: { id: part_id }, data: { stock_current: { decrement: qty } } })
+      }
 
       await tx.stockMovement.create({
         data: {
@@ -458,6 +445,23 @@ router.post('/:id/ship', async (req, res) => {
     } catch (err) {
       return res.status(422).json({ error: 'Error GLS: ' + err.message })
     }
+  }
+
+  // Si viene de CONFIRMED (sin picking), descontar stock ahora
+  if (note.status === 'CONFIRMED') {
+    const lines = await prisma.deliveryNoteLine.findMany({ where: { delivery_note_id: id } })
+    await prisma.$transaction([
+      ...lines.flatMap(line => [
+        prisma.part.update({ where: { id: line.part_id }, data: { stock_current: { decrement: line.quantity } } }),
+        prisma.stockMovement.create({
+          data: {
+            part_id: line.part_id, type: 'OUT', quantity: line.quantity,
+            reference_type: 'DELIVERY', reference_id: id,
+            notes: `Albarán ALB-${id}`,
+          }
+        })
+      ])
+    ])
   }
 
   await prisma.deliveryNoteEvent.create({ data: { delivery_note_id: id, status: 'SHIPPED' } })
