@@ -96,10 +96,12 @@ export default function PartForm({ initial, onSave, onCancel }) {
   const [error, setError] = useState(null)
   const [odooProducts, setOdooProducts] = useState([])
   const [allLocations, setAllLocations] = useState([])
+  const [allCategories, setAllCategories] = useState([])
 
   useEffect(() => {
     api.getOdooProducts().then(setOdooProducts).catch(() => {})
     api.getPartLocations().then(setAllLocations).catch(() => {})
+    api.getPartCategories().then(setAllCategories).catch(() => {})
   }, [])
 
   function set(field, value) {
@@ -162,7 +164,19 @@ export default function PartForm({ initial, onSave, onCancel }) {
       </div>
 
       <div className="grid grid-cols-2 gap-4">
-        {field('Categoría', 'category')}
+        <div>
+          <label className="block text-xs font-medium text-gray-600 mb-1">Categoría</label>
+          <input
+            type="text"
+            list="partform-categories-list"
+            value={form.category || ''}
+            onChange={e => set('category', e.target.value)}
+            className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+          <datalist id="partform-categories-list">
+            {allCategories.map(c => <option key={c} value={c} />)}
+          </datalist>
+        </div>
         {field('Unidad', 'unit', 'text', { placeholder: 'ud, kg, m...' })}
       </div>
 
