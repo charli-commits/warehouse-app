@@ -472,16 +472,24 @@ export default function Deliveries() {
   const [activeTab, setActiveTab] = useState('ALL')
   const [search, setSearch] = useState('')
   const [showResumenModal, setShowResumenModal] = useState(false)
+  const [showEtiquetasModal, setShowEtiquetasModal] = useState(false)
   const [resumenDate, setResumenDate] = useState(new Date().toISOString().slice(0, 10))
+  const [etiquetasDate, setEtiquetasDate] = useState(new Date().toISOString().slice(0, 10))
 
   async function handleEtiquetasPdf() {
+    setShowEtiquetasModal(true)
+  }
+
+  async function downloadEtiquetas() {
     try {
       const token = JSON.parse(localStorage.getItem('wh_user') || '{}')?.token
-      const res = await fetch('/api/deliveries/etiquetas-pdf', { headers: { Authorization: `Bearer ${token}` } })
+      const res = await fetch(`/api/deliveries/etiquetas-pdf?date=${etiquetasDate}`, { headers: { Authorization: `Bearer ${token}` } })
       if (!res.ok) { const e = await res.json().catch(() => ({})); alert('Error al generar PDF: ' + (e.error || res.status)); return }
       const blob = await res.blob()
       const url = URL.createObjectURL(blob)
-      window.open(url, '_blank')
+      const a = document.createElement('a')
+      a.href = url; a.download = `etiquetas-${etiquetasDate}.pdf`; a.click()
+      setShowEtiquetasModal(false)
     } catch (err) { alert('Error: ' + err.message) }
   }
 
@@ -1040,6 +1048,26 @@ export default function Deliveries() {
         <Modal title={editing ? `Editar ALB-${editing.id}` : 'Nuevo albarán'}
           onClose={() => { setShowForm(false); setEditing(null) }} size="lg">
           <DeliveryForm initial={editing} onSave={handleSave} onCancel={() => { setShowForm(false); setEditing(null) }} />
+        </Modal>
+      )}
+      {showEtiquetasModal && (
+        <Modal title="Imprimir etiquetas" onClose={() => setShowEtiquetasModal(false)}>
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Fecha de envío</label>
+              <input
+                type="date"
+                value={etiquetasDate}
+                onChange={e => setEtiquetasDate(e.target.value)}
+                className="border rounded px-3 py-2 text-sm w-full"
+              />
+            </div>
+            <p className="text-xs text-gray-500">Se incluirán las etiquetas de todos los albaranes enviados ese día.</p>
+            <div className="flex gap-2 justify-end">
+              <button onClick={() => setShowEtiquetasModal(false)} className="px-4 py-2 text-sm border rounded hover:bg-gray-50">Cancelar</button>
+              <button onClick={downloadEtiquetas} className="px-4 py-2 text-sm bg-blue-600 text-white rounded hover:bg-blue-700">Descargar PDF</button>
+            </div>
+          </div>
         </Modal>
       )}
       {showResumenModal && (

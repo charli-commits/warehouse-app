@@ -120,31 +120,47 @@ router.get('/resumen-cierre', async (req, res) => {
   }
 })
 
-// GET /api/deliveries/etiquetas-pdf — merged PDF of all labels for READY/SHIPPED notes
+// GET /api/deliveries/etiquetas-pdf?date=YYYY-MM-DD — merged PDF of labels for a given date (shipped_at)
 router.get('/etiquetas-pdf', async (req, res) => {
   try {
-    const notes = await prisma.deliveryNote.findMany({
-      where: { status: { in: ['READY', 'SHIPPED'] }, gls_label_url: { not: null } }
-    })
-
-    const pdfsToMerge = notes
-      .map(n => path.join(__dirname, '..', '..', n.gls_label_url))
-      .filter(f => fs.existsSync(f))
-
-    if (pdfsToMerge.length === 0)
-      return res.status(404).json({ error: 'No hay etiquetas disponibles para fusionar' })
-
-    const merged = await PDFDocument.create()
-    for (const file of pdfsToMerge) {
-      const bytes = fs.readFileSync(file)
-      const doc = await PDFDocument.load(bytes)
-      const pages = await merged.copyPages(doc, doc.getPageIndices())
-      pages.forEach(p => merged.addPage(p))
+    const { date } = req.query
+    let where = { status: { in: ['READY', 'SHIPPED'] }, gls_label_url: { not: null } }
+    if (date) {
+      const start = new Date(date); start.setHours(0, 0, 0, 0)
+      const end = new Date(date); end.setHours(23, 59, 59, 999)
+      where.shipped_at = { gte: start, lte: end }
     }
 
+    const notes = await prisma.deliveryNote.findMany({ where })
+    if (notes.length === 0)
+      return res.status(404).json({ error: date ? `No hay etiquetas para el ${date}` : 'No hay etiquetas disponibles' })
+
+    const merged = await PDFDocument.create()
+    for (const note of notes) {
+      try {
+        let pdfBytes
+        if (note.gls_label_url.startsWith('http')) {
+          const r = await fetch(note.gls_label_url)
+          if (!r.ok) continue
+          pdfBytes = Buffer.from(await r.arrayBuffer())
+        } else {
+          const localPath = path.join(__dirname, '..', '..', note.gls_label_url)
+          if (!fs.existsSync(localPath)) continue
+          pdfBytes = fs.readFileSync(localPath)
+        }
+        const doc = await PDFDocument.load(pdfBytes)
+        const pages = await merged.copyPages(doc, doc.getPageIndices())
+        pages.forEach(p => merged.addPage(p))
+      } catch { /* skip unreadable labels */ }
+    }
+
+    if (merged.getPageCount() === 0)
+      return res.status(404).json({ error: 'No se pudieron cargar las etiquetas' })
+
     const mergedBytes = await merged.save()
+    const suffix = date || new Date().toISOString().slice(0, 10)
     res.setHeader('Content-Type', 'application/pdf')
-    res.setHeader('Content-Disposition', `attachment; filename="etiquetas-${new Date().toISOString().slice(0,10)}.pdf"`)
+    res.setHeader('Content-Disposition', `attachment; filename="etiquetas-${suffix}.pdf"`)
     res.send(Buffer.from(mergedBytes))
   } catch (err) {
     res.status(500).json({ error: err.message })
