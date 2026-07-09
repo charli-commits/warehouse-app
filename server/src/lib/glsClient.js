@@ -307,8 +307,7 @@ async function checkEstado(codbarras) {
   const statusCode = estadoMatch ? estadoMatch[1].trim() : ''
   const description = descMatch ? descMatch[1].trim() : ''
 
-  // GLS uses code "07" or description containing ENTREGADO for delivered status
-  const delivered = /^07$/.test(statusCode) || /entregad/i.test(description) || /delivered/i.test(description)
+  const delivered = /entregad/i.test(statusCode) || /entregad/i.test(description) || /^07$/.test(statusCode)
 
   return { delivered, statusCode, description, raw }
 }
