@@ -497,6 +497,18 @@ export default function Deliveries() {
     setShowResumenModal(true)
   }
 
+  async function handleSyncGls() {
+    if (!confirm('¿Consultar GLS y actualizar estados de entrega?')) return
+    try {
+      const token = JSON.parse(localStorage.getItem('wh_user') || '{}')?.token
+      const res = await fetch('/api/deliveries/sync-gls-status', { method: 'POST', headers: { Authorization: `Bearer ${token}` } })
+      const data = await res.json()
+      if (!res.ok) { alert('Error: ' + (data.error || res.status)); return }
+      alert(`Actualizado: ${data.checked} consultados, ${data.delivered} marcados como entregados${data.errors ? `, ${data.errors} errores` : ''}`)
+      loadNotes()
+    } catch (err) { alert('Error: ' + err.message) }
+  }
+
   async function downloadResumen() {
     try {
       const token = JSON.parse(localStorage.getItem('wh_user') || '{}')?.token
@@ -646,6 +658,10 @@ export default function Deliveries() {
             className="hidden md:block border border-gray-300 hover:border-green-400 hover:text-green-600 text-gray-600 text-sm font-medium px-4 py-2 rounded-md">
             📄 Resumen envíos
           </button>
+          <button onClick={handleSyncGls}
+            className="hidden md:block border border-gray-300 hover:border-purple-400 hover:text-purple-600 text-gray-600 text-sm font-medium px-4 py-2 rounded-md">
+            🔄 Sync GLS
+          </button>
           <a href="https://gls-group.eu/ES/es/extranet" target="_blank" rel="noreferrer"
             className="hidden md:block border border-gray-300 hover:border-orange-400 hover:text-orange-600 text-gray-600 text-sm font-medium px-4 py-2 rounded-md">
             🚚 Cerrar jornada GLS
@@ -671,6 +687,10 @@ export default function Deliveries() {
           className="flex-1 text-center border border-gray-300 text-gray-600 text-sm font-medium px-3 py-2 rounded-md active:bg-gray-50">
           🚚 Cerrar jornada
         </a>
+        <button onClick={handleSyncGls}
+          className="flex-1 text-center border border-gray-300 text-gray-600 text-sm font-medium px-3 py-2 rounded-md active:bg-gray-50">
+          🔄 Sync GLS
+        </button>
       </div>
 
       {/* Search + filters */}

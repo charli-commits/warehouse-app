@@ -848,4 +848,41 @@ router.post('/cierre-jornada', async (req, res) => {
   }
 })
 
+// POST /api/deliveries/sync-gls-status — check GLS Estado for all SHIPPED notes and mark delivered
+// Accepts requests from UI (JWT) or from Render cron job (x-cron-secret header)
+router.post('/sync-gls-status', async (req, res) => {
+  const cronSecret = process.env.CRON_SECRET
+  const fromCron = cronSecret && req.headers['x-cron-secret'] === cronSecret
+  // Auth: either valid JWT (handled by middleware before this route) or cron secret
+  if (!fromCron && !req.user) return res.status(401).json({ error: 'No autorizado' })
+
+  const notes = await prisma.deliveryNote.findMany({
+    where: { status: 'SHIPPED', gls_codbarras: { not: null } }
+  })
+
+  const results = { checked: 0, delivered: 0, errors: 0 }
+  for (const note of notes) {
+    const codes = note.gls_codbarras.split(',').filter(Boolean)
+    for (const codbarras of codes) {
+      try {
+        const estado = await glsClient.checkEstado(codbarras)
+        results.checked++
+        if (estado.delivered) {
+          await prisma.$transaction([
+            prisma.deliveryNote.update({ where: { id: note.id }, data: { status: 'DELIVERED' } }),
+            prisma.deliveryNoteEvent.create({ data: { delivery_note_id: note.id, status: 'DELIVERED' } }),
+          ])
+          results.delivered++
+          console.log(`[GLS sync] ALB-${note.id} marcado como DELIVERED (${codbarras}: ${estado.statusCode} - ${estado.description})`)
+        }
+      } catch (err) {
+        console.error(`[GLS sync] Error ALB-${note.id} (${codbarras}):`, err.message)
+        results.errors++
+      }
+    }
+  }
+
+  res.json({ ok: true, ...results })
+})
+
 module.exports = router

@@ -290,4 +290,27 @@ async function cierreJornada() {
   return { pdfBuffer: b64Match ? Buffer.from(b64Match[1].trim(), 'base64') : null }
 }
 
-module.exports = { createShipment, borraServicios, cierreJornada, isConfigured, activeUid }
+// Query shipment status via Estado operation
+// Returns { delivered: bool, statusCode: string, description: string }
+async function checkEstado(codbarras) {
+  if (!isConfigured()) throw new Error('GLS_UID no configurado')
+  const innerXml = `<Expediciones uidcliente="${esc(activeUid())}" xmlns="${GLS_NS}">
+    <Expedicion codbarras="${esc(codbarras)}"></Expedicion>
+  </Expediciones>`
+  const envelope = soapEnvelope('Estado', innerXml)
+  const raw = await postSoap(envelope, `${GLS_NS}Estado`)
+  console.log('[GLS] Estado response for', codbarras, ':', raw.slice(0, 600))
+
+  // Parse estado/situation — GLS typically returns codEstado or similar
+  const estadoMatch = raw.match(/codEstado="([^"]+)"/i) || raw.match(/<Estado[^>]*>([^<]+)<\/Estado>/i)
+  const descMatch = raw.match(/descEstado="([^"]+)"/i) || raw.match(/<Descripcion[^>]*>([^<]+)<\/Descripcion>/i)
+  const statusCode = estadoMatch ? estadoMatch[1].trim() : ''
+  const description = descMatch ? descMatch[1].trim() : ''
+
+  // GLS uses code "07" or description containing ENTREGADO for delivered status
+  const delivered = /^07$/.test(statusCode) || /entregad/i.test(description) || /delivered/i.test(description)
+
+  return { delivered, statusCode, description, raw }
+}
+
+module.exports = { createShipment, borraServicios, cierreJornada, checkEstado, isConfigured, activeUid }
