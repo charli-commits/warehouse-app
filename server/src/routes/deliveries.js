@@ -877,6 +877,7 @@ router.post('/sync-gls-status', async (req, res) => {
         }
       } catch (err) {
         console.error(`[GLS sync] Error ALB-${note.id} (${codbarras}):`, err.message)
+        if (results.errors === 0) results.firstError = err.message
         results.errors++
       }
     }
