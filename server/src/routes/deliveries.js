@@ -861,12 +861,17 @@ router.post('/sync-gls-status', async (req, res) => {
   })
 
   const results = { checked: 0, delivered: 0, errors: 0 }
+  let sampleLogged = false
   for (const note of notes) {
     const codes = note.gls_codbarras.split(',').filter(Boolean)
     for (const codbarras of codes) {
       try {
         const estado = await glsClient.checkEstado(codbarras)
         results.checked++
+        if (!sampleLogged) {
+          results.sampleStatus = { codbarras, statusCode: estado.statusCode, description: estado.description, rawSnippet: estado.raw.slice(0, 400) }
+          sampleLogged = true
+        }
         if (estado.delivered) {
           await prisma.$transaction([
             prisma.deliveryNote.update({ where: { id: note.id }, data: { status: 'DELIVERED' } }),
