@@ -181,7 +181,7 @@ router.get('/:id', async (req, res) => {
 // POST /api/deliveries
 router.post('/', async (req, res) => {
   try {
-    const { odoo_partner_id, odoo_partner_name, shipping_address, notes, client_ref, lines = [], created_by_id } = req.body
+    const { odoo_partner_id, odoo_partner_name, shipping_address, notes, client_ref, lines = [], created_by_id, gls_retorno, gls_horario } = req.body
     const note = await prisma.deliveryNote.create({
       data: {
         odoo_partner_id: odoo_partner_id ? Number(odoo_partner_id) : null,
@@ -189,6 +189,8 @@ router.post('/', async (req, res) => {
         shipping_address: shipping_address ? JSON.stringify(shipping_address) : null,
         notes,
         client_ref: client_ref || null,
+        gls_retorno: gls_retorno === true,
+        gls_horario: gls_horario != null ? Number(gls_horario) : null,
         created_by_id: created_by_id ? Number(created_by_id) : null,
         lines: {
           create: lines.map(l => ({
@@ -212,7 +214,7 @@ router.post('/', async (req, res) => {
 router.put('/:id', async (req, res) => {
   const id = Number(req.params.id)
   try {
-    const { odoo_partner_id, odoo_partner_name, shipping_address, notes, client_ref, parcels, lines } = req.body
+    const { odoo_partner_id, odoo_partner_name, shipping_address, notes, client_ref, parcels, lines, gls_retorno, gls_horario } = req.body
     const updateData = {
       ...(odoo_partner_id !== undefined && { odoo_partner_id: odoo_partner_id ? Number(odoo_partner_id) : null }),
       ...(odoo_partner_name !== undefined && { odoo_partner_name }),
@@ -220,6 +222,8 @@ router.put('/:id', async (req, res) => {
       ...(notes !== undefined && { notes }),
       ...(client_ref !== undefined && { client_ref: client_ref || null }),
       ...(parcels !== undefined && { parcels: Math.max(1, Number(parcels)) }),
+      ...(gls_retorno !== undefined && { gls_retorno: gls_retorno === true }),
+      ...(gls_horario !== undefined && { gls_horario: gls_horario != null ? Number(gls_horario) : null }),
     }
 
     if (lines) {
@@ -418,7 +422,7 @@ router.post('/:id/close-picking', async (req, res) => {
 // carrier=DACHSER (or other): marks shipped immediately, tracking can be added later
 router.post('/:id/ship', async (req, res) => {
   const id = Number(req.params.id)
-  const { carrier, retorno } = req.body
+  const { carrier } = req.body
   const note = await prisma.deliveryNote.findUnique({ where: { id } })
   if (!note) return res.status(404).json({ error: 'Delivery note not found' })
   if (!['CONFIRMED', 'READY'].includes(note.status)) return res.status(409).json({ error: 'Solo albaranes CONFIRMED o READY pueden enviarse' })
@@ -433,7 +437,8 @@ router.post('/:id/ship', async (req, res) => {
       const result = await glsClient.createShipment({
         ref: `${note.client_ref || `ALB-${note.id}`}-${Date.now()}`,
         parcels: note.parcels || 1,
-        retorno: retorno ? 1 : 0,
+        retorno: note.gls_retorno ? 1 : 0,
+        horario: note.gls_horario != null ? note.gls_horario : undefined,
         recipient: {
           name: note.odoo_partner_name || 'Cliente',
           address: addr.street || '',
