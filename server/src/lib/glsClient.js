@@ -294,9 +294,9 @@ async function cierreJornada() {
 // Returns { delivered: bool, statusCode: string, description: string }
 async function checkEstado(codbarras) {
   if (!isConfigured()) throw new Error('GLS_UID no configurado')
-  const innerXml = `<Expediciones uidcliente="${esc(activeUid())}" xmlns="${GLS_NS}">
-    <Expedicion codbarras="${esc(codbarras)}"></Expedicion>
-  </Expediciones>`
+  const innerXml = `<Servicios uidcliente="${esc(activeUid())}" xmlns="${GLS_NS}">
+    <Envio codbarras="${esc(codbarras)}"></Envio>
+  </Servicios>`
   const envelope = soapEnvelope('Estado', innerXml)
   const raw = await postSoap(envelope, `${GLS_NS}Estado`)
   console.log('[GLS] Estado response for', codbarras, ':', raw.slice(0, 600))
