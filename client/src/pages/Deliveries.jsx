@@ -383,7 +383,6 @@ export default function Deliveries() {
   const [shippingId, setShippingId] = useState(null)
   const [shipCarrier, setShipCarrier] = useState('')
   const [shipParcels, setShipParcels] = useState(1)
-  const [shipRetorno, setShipRetorno] = useState(false)
   const [editTrackingId, setEditTrackingId] = useState(null)
   const [editTrackingVal, setEditTrackingVal] = useState('')
   const [users, setUsers] = useState([])
@@ -426,8 +425,8 @@ export default function Deliveries() {
   async function handleShip(id, carrier) {
     try {
       if (shipParcels > 1) await api.updateDelivery(id, { parcels: shipParcels })
-      await api.shipDelivery(id, { carrier, retorno: carrier === 'GLS' ? shipRetorno : false })
-      setShippingId(null); setShipCarrier(''); setShipParcels(1); setShipRetorno(false)
+      await api.shipDelivery(id, { carrier })
+      setShippingId(null); setShipCarrier(''); setShipParcels(1)
       load()
     }
     catch (err) { alert(err.message) }
@@ -638,16 +637,12 @@ export default function Deliveries() {
                       onChange={e => setShipParcels(Math.max(1, Number(e.target.value)))}
                       className="w-12 border border-gray-300 rounded px-1.5 py-1 text-xs text-center" />
                   </div>
-                  <label className="flex items-center gap-1.5 text-xs text-gray-500 cursor-pointer">
-                    <input type="checkbox" checked={shipRetorno} onChange={e => setShipRetorno(e.target.checked)} className="rounded" />
-                    Con retorno
-                  </label>
                   <div className="flex gap-1.5 items-center">
                     <button onClick={() => handleShip(note.id, 'GLS')}
                       className="bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold px-3 py-1.5 rounded-md">GLS</button>
                     <button onClick={() => handleShip(note.id, 'DACHSER')}
                       className="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold px-3 py-1.5 rounded-md">DACHSER</button>
-                    <button onClick={() => { setShippingId(null); setShipParcels(1); setShipRetorno(false) }} className="text-gray-400 text-xs">✕</button>
+                    <button onClick={() => { setShippingId(null); setShipParcels(1) }} className="text-gray-400 text-xs">✕</button>
                   </div>
                 </div>
               )}
@@ -854,16 +849,12 @@ export default function Deliveries() {
                           onChange={e => setShipParcels(Math.max(1, Number(e.target.value)))}
                           className="w-12 border border-gray-300 rounded px-1.5 py-1 text-xs text-center" />
                       </div>
-                      <label className="flex items-center gap-1.5 text-xs text-gray-500 cursor-pointer">
-                        <input type="checkbox" checked={shipRetorno} onChange={e => setShipRetorno(e.target.checked)} className="rounded" />
-                        Con retorno
-                      </label>
                       <div className="flex gap-1.5">
                         <button onClick={() => handleShip(note.id, 'GLS')}
                           className="bg-purple-600 text-white text-xs font-bold px-2.5 py-1.5 rounded-md">GLS</button>
                         <button onClick={() => handleShip(note.id, 'DACHSER')}
                           className="bg-indigo-600 text-white text-xs font-bold px-2.5 py-1.5 rounded-md">DACHSER</button>
-                        <button onClick={() => { setShippingId(null); setShipParcels(1); setShipRetorno(false) }} className="text-gray-400 text-xs px-1">✕</button>
+                        <button onClick={() => { setShippingId(null); setShipParcels(1) }} className="text-gray-400 text-xs px-1">✕</button>
                       </div>
                     </div>
                   )}
