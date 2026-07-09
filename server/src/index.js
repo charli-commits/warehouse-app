@@ -55,6 +55,8 @@ app.post('/api/update-images', async (req, res) => {
 // Middleware JWT para todas las demás rutas /api/*
 app.use('/api', (req, res, next) => {
   if (req.path.startsWith('/auth/')) return next()
+  const cronSecret = process.env.CRON_SECRET
+  if (cronSecret && req.headers['x-cron-secret'] === cronSecret) return next()
   return requireAuth(req, res, next)
 })
 
