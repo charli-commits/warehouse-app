@@ -127,13 +127,12 @@ router.get('/etiquetas-pdf', async (req, res) => {
     let where = { status: { in: ['READY', 'SHIPPED'] }, gls_label_url: { not: null } }
     if (date) {
       const start = new Date(date); start.setHours(0, 0, 0, 0)
-      const end = new Date(date); end.setHours(23, 59, 59, 999)
-      where.shipped_at = { gte: start, lte: end }
+      where.shipped_at = { gte: start }
     }
 
     const notes = await prisma.deliveryNote.findMany({ where })
     if (notes.length === 0)
-      return res.status(404).json({ error: date ? `No hay etiquetas para el ${date}` : 'No hay etiquetas disponibles' })
+      return res.status(404).json({ error: date ? `No hay etiquetas desde el ${date}` : 'No hay etiquetas disponibles' })
 
     const merged = await PDFDocument.create()
     for (const note of notes) {

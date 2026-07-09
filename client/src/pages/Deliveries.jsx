@@ -1062,7 +1062,7 @@ export default function Deliveries() {
                 className="border rounded px-3 py-2 text-sm w-full"
               />
             </div>
-            <p className="text-xs text-gray-500">Se incluirán las etiquetas de todos los albaranes enviados ese día.</p>
+            <p className="text-xs text-gray-500">Se incluirán las etiquetas de todos los albaranes enviados desde esa fecha en adelante.</p>
             <div className="flex gap-2 justify-end">
               <button onClick={() => setShowEtiquetasModal(false)} className="px-4 py-2 text-sm border rounded hover:bg-gray-50">Cancelar</button>
               <button onClick={downloadEtiquetas} className="px-4 py-2 text-sm bg-blue-600 text-white rounded hover:bg-blue-700">Descargar PDF</button>
