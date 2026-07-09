@@ -7,7 +7,7 @@
     "deploy": "git checkout main && git merge dev && git push origin main && git checkout dev",
     "install:all": "npm install && npm install --prefix server && npm install --prefix client",
     "build": "npm install --prefix server && npm install --prefix client && npm run build --prefix client",
-    "start": "cd server && npx prisma generate && npx prisma migrate deploy && NODE_ENV=production node src/index.js",
+    "start": "cd server && npx prisma generate --schema prisma/schema.prod.prisma && npx prisma migrate deploy --schema prisma/schema.prod.prisma && NODE_ENV=production node src/index.js",
     "db:migrate": "npm run db:migrate --prefix server"
   },
   "devDependencies": {
