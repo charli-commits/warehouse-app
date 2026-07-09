@@ -66,11 +66,30 @@ function glsCountryCode(iso) {
   return GLS_COUNTRY_CODES[(iso || 'ES').toUpperCase()] ?? 34
 }
 
-function buildShipmentXml({ recipient, ref, fecha, parcels = 1, retorno = 0, horario: horarioOverride }) {
+// Valid nacional combos (from ES-GLS-Maestros_V2.xlsx "Servicios&Horarios"):
+//   96 / 18 → BusinessParcel 24-48h (default)
+//   37 / 18 → EconomyParcel 72h
+//    1 /  3 → Courier Express19:00
+//    1 /  2 → Courier Express14:00
+//    1 /  0 → Courier Express10:30
+const GLS_SERVICE_MAP = {
+  '96_18': { servicio: 96, horario: 18 }, // default
+  '37_18': { servicio: 37, horario: 18 },
+  '1_3':   { servicio: 1,  horario: 3  },
+  '1_2':   { servicio: 1,  horario: 2  },
+  '1_0':   { servicio: 1,  horario: 0  },
+}
+
+function buildShipmentXml({ recipient, ref, fecha, parcels = 1, retorno = 0, serviceKey }) {
   const dateStr = fecha || new Date().toLocaleDateString('es-ES', { day:'2-digit', month:'2-digit', year:'numeric' })
   const isInternational = recipient.country && recipient.country.toUpperCase() !== 'ES'
-  const servicio = isInternational ? 74 : 96
-  const horario  = isInternational ? 3 : (horarioOverride != null ? horarioOverride : 18)
+  let servicio, horario
+  if (isInternational) {
+    servicio = 74; horario = 3
+  } else {
+    const combo = GLS_SERVICE_MAP[serviceKey] || GLS_SERVICE_MAP['96_18']
+    servicio = combo.servicio; horario = combo.horario
+  }
   return `<Servicios uidcliente="${esc(activeUid())}" xmlns="${GLS_NS}">
   <Envio codbarras="">
     <Fecha>${dateStr}</Fecha>
@@ -153,8 +172,13 @@ function postSoap(xmlBody, soapAction) {
 }
 
 // Step 1: create shipment → returns array of { codbarras, codexp }
-async function grabaServicios(recipient, ref, parcels = 1, retorno = 0, horario) {
-  const innerXml = buildShipmentXml({ recipient, ref, parcels, retorno, horario })
+// gls_horario DB int → serviceKey mapping
+// 0 or null = 96/18 BusinessParcel (default), 1 = 37/18 Economy, 2 = 1/3 Express19, 3 = 1/2 Express14, 4 = 1/0 Express10:30
+const GLS_HORARIO_TO_KEY = { 0: '96_18', 1: '37_18', 2: '1_3', 3: '1_2', 4: '1_0' }
+function glsServiceKey(glsHorario) { return GLS_HORARIO_TO_KEY[glsHorario] || '96_18' }
+
+async function grabaServicios(recipient, ref, parcels = 1, retorno = 0, serviceKey) {
+  const innerXml = buildShipmentXml({ recipient, ref, parcels, retorno, serviceKey })
   const envelope = soapEnvelope('GrabaServicios', innerXml)
   const raw = await postSoap(envelope, `${GLS_NS}GrabaServicios`)
 
@@ -206,7 +230,7 @@ async function etiquetaEnvio(codbarras) {
 
 // Public — creates shipment + fetches label PDFs, merges into one buffer
 // Returns { tracking: string (comma-separated), labelPdfBuffer: Buffer }
-async function createShipment({ recipient, ref, parcels = 1, retorno = 0, horario }) {
+async function createShipment({ recipient, ref, parcels = 1, retorno = 0, glsHorario }) {
   if (!isConfigured()) throw new Error('GLS_UID no configurado en .env')
   if (!recipient.zip || recipient.zip.length < 4)
     throw new Error('Falta el código postal del destinatario. Edita la dirección del albarán antes de generar la etiqueta GLS.')
@@ -215,7 +239,7 @@ async function createShipment({ recipient, ref, parcels = 1, retorno = 0, horari
   if (!recipient.address)
     throw new Error('Falta la dirección del destinatario.')
 
-  const envios = await grabaServicios(recipient, ref, parcels, retorno, horario)
+  const envios = await grabaServicios(recipient, ref, parcels, retorno, glsServiceKey(glsHorario))
   const labelBuffers = []
   for (const { codbarras } of envios) {
     try {

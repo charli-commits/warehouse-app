@@ -108,7 +108,7 @@ function DeliveryForm({ initial, onSave, onCancel }) {
     shipping_address: initial?.shipping_address ? JSON.parse(initial.shipping_address) : null,
     notes: initial?.notes ?? '',
     gls_retorno: initial?.gls_retorno ?? false,
-    gls_horario: initial?.gls_horario ?? null,
+    gls_horario: initial?.gls_horario ?? 0,
     lines: initial?.lines?.map(l => ({
       part_id: l.part_id,
       part_code: l.part?.code ?? '',
@@ -169,7 +169,7 @@ function DeliveryForm({ initial, onSave, onCancel }) {
         shipping_address: form.shipping_address,
         notes: form.notes || null,
         gls_retorno: form.gls_retorno,
-        gls_horario: form.gls_horario != null ? Number(form.gls_horario) : null,
+        gls_horario: Number(form.gls_horario),
         lines: form.lines.map(l => ({ part_id: Number(l.part_id), quantity: Number(l.quantity) }))
       })
     } catch (err) { setError(err.message) }
@@ -330,12 +330,13 @@ function DeliveryForm({ initial, onSave, onCancel }) {
       </div>
       <div>
         <label className="block text-xs font-medium text-gray-600 mb-1">Horario GLS <span className="text-gray-400 font-normal">(servicio de entrega)</span></label>
-        <select value={form.gls_horario ?? ''} onChange={e => setForm(f => ({ ...f, gls_horario: e.target.value === '' ? null : Number(e.target.value) }))}
+        <select value={form.gls_horario ?? 0} onChange={e => setForm(f => ({ ...f, gls_horario: Number(e.target.value) }))}
           className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
-          <option value="18">Express 19:00 (estándar)</option>
-          <option value="0">Economy</option>
-          <option value="10">Express 10:30</option>
-          <option value="14">Express 14:00</option>
+          <option value={0}>BusinessParcel 24-48h (estándar)</option>
+          <option value={1}>EconomyParcel 72h</option>
+          <option value={2}>Express 19:00</option>
+          <option value={3}>Express 14:00</option>
+          <option value={4}>Express 10:30</option>
         </select>
       </div>
       <label className="flex items-center gap-2 cursor-pointer">

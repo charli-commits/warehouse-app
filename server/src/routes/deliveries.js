@@ -438,7 +438,7 @@ router.post('/:id/ship', async (req, res) => {
         ref: `${note.client_ref || `ALB-${note.id}`}-${Date.now()}`,
         parcels: note.parcels || 1,
         retorno: note.gls_retorno ? 1 : 0,
-        horario: note.gls_horario != null ? note.gls_horario : undefined,
+        glsHorario: note.gls_horario,
         recipient: {
           name: note.odoo_partner_name || 'Cliente',
           address: addr.street || '',
