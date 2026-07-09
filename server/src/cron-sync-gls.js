@@ -22,6 +22,7 @@ async function run() {
     process.exit(1)
   }
   console.log(`[cron] Done: ${data.checked} checked, ${data.delivered} delivered, ${data.errors} errors`)
+  if (data.firstError) console.log('[cron] First error:', data.firstError)
 }
 
 run().catch(err => { console.error('[cron] Fatal:', err); process.exit(1) })
