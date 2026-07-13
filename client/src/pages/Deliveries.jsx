@@ -915,7 +915,7 @@ export default function Deliveries() {
                       : <p className="text-sm text-gray-400">Sin transportista asignado</p>}
                     {n.gls_tracking && <span className="inline-flex items-center gap-1"><span className="font-mono text-sm text-blue-600 select-all cursor-text">{n.gls_tracking}</span><a href="https://gls-group.eu/ES/es/home/" target="_blank" rel="noreferrer" title="Abrir seguimiento GLS" className="text-blue-400 hover:text-blue-600">🔗</a></span>}
                     {n.gls_label_url && (
-                      <a href={`${n.gls_label_url}`} target="_blank" rel="noreferrer"
+                      <a href={`/api/deliveries/${n.id}/label`} target="_blank" rel="noreferrer"
                         className="inline-flex items-center gap-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 text-xs font-medium px-3 py-1.5 rounded-md">
                         📄 Ver etiqueta PDF
                       </a>

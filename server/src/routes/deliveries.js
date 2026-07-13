@@ -13,6 +13,23 @@ fs.mkdirSync(LABELS_DIR, { recursive: true })
 const SUPABASE_URL = process.env.SUPABASE_URL || 'https://wtpaggzdwhpxxtatcpxo.supabase.co'
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY || ''
 
+// In-memory cache for Supabase label PDFs — avoids re-downloading the same
+// file from Supabase on every etiquetas-pdf request (reduces egress).
+// Max 200 entries; evict oldest when full.
+const labelCache = new Map()
+const LABEL_CACHE_MAX = 200
+async function fetchLabelPdf(url) {
+  if (labelCache.has(url)) return labelCache.get(url)
+  const r = await fetch(url)
+  if (!r.ok) throw new Error(`HTTP ${r.status}`)
+  const buf = Buffer.from(await r.arrayBuffer())
+  if (labelCache.size >= LABEL_CACHE_MAX) {
+    labelCache.delete(labelCache.keys().next().value)
+  }
+  labelCache.set(url, buf)
+  return buf
+}
+
 async function uploadLabelToSupabase(filename, buffer) {
   const res = await fetch(`${SUPABASE_URL}/storage/v1/object/labels/${filename}`, {
     method: 'POST',
@@ -139,9 +156,7 @@ router.get('/etiquetas-pdf', async (req, res) => {
       try {
         let pdfBytes
         if (note.gls_label_url.startsWith('http')) {
-          const r = await fetch(note.gls_label_url)
-          if (!r.ok) continue
-          pdfBytes = Buffer.from(await r.arrayBuffer())
+          pdfBytes = await fetchLabelPdf(note.gls_label_url)
         } else {
           const localPath = path.join(__dirname, '..', '..', note.gls_label_url)
           if (!fs.existsSync(localPath)) continue
@@ -161,6 +176,27 @@ router.get('/etiquetas-pdf', async (req, res) => {
     res.setHeader('Content-Type', 'application/pdf')
     res.setHeader('Content-Disposition', `attachment; filename="etiquetas-${suffix}.pdf"`)
     res.send(Buffer.from(mergedBytes))
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// GET /api/deliveries/:id/label — serve label PDF via server cache (avoids direct Supabase egress)
+router.get('/:id/label', async (req, res) => {
+  try {
+    const note = await prisma.deliveryNote.findUnique({ where: { id: Number(req.params.id) }, select: { gls_label_url: true, gls_tracking: true } })
+    if (!note?.gls_label_url) return res.status(404).json({ error: 'No hay etiqueta para este albarán' })
+    let pdfBytes
+    if (note.gls_label_url.startsWith('http')) {
+      pdfBytes = await fetchLabelPdf(note.gls_label_url)
+    } else {
+      const localPath = path.join(__dirname, '..', '..', note.gls_label_url)
+      if (!fs.existsSync(localPath)) return res.status(404).json({ error: 'Etiqueta no encontrada' })
+      pdfBytes = fs.readFileSync(localPath)
+    }
+    res.setHeader('Content-Type', 'application/pdf')
+    res.setHeader('Content-Disposition', `inline; filename="etiqueta-${note.gls_tracking || req.params.id}.pdf"`)
+    res.send(pdfBytes)
   } catch (err) {
     res.status(500).json({ error: err.message })
   }
