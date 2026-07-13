@@ -417,8 +417,21 @@ router.post('/:id/verify-line', async (req, res) => {
         const agg = await tx.partLocation.aggregate({ where: { part_id }, _sum: { stock: true } })
         await tx.part.update({ where: { id: part_id }, data: { stock_current: agg._sum.stock || 0 } })
       } else {
-        // Sin ubicación: decrementar stock_current directamente
-        await tx.part.update({ where: { id: part_id }, data: { stock_current: { decrement: qty } } })
+        // Sin ubicación: descontar de PartLocations en orden descendente de stock
+        const locs = await tx.partLocation.findMany({
+          where: { part_id, stock: { gt: 0 } },
+          orderBy: { stock: 'desc' }
+        })
+        let remaining = qty
+        for (const loc of locs) {
+          if (remaining <= 0) break
+          const deduct = Math.min(loc.stock, remaining)
+          await tx.partLocation.update({ where: { id: loc.id }, data: { stock: { decrement: deduct } } })
+          remaining -= deduct
+        }
+        // Recalcular stock_current desde PartLocation
+        const agg = await tx.partLocation.aggregate({ where: { part_id }, _sum: { stock: true } })
+        await tx.part.update({ where: { id: part_id }, data: { stock_current: agg._sum.stock || 0 } })
       }
 
       await tx.stockMovement.create({
@@ -506,18 +519,32 @@ router.post('/:id/ship', async (req, res) => {
   // Si viene de CONFIRMED (sin picking), descontar stock ahora
   if (note.status === 'CONFIRMED') {
     const lines = await prisma.deliveryNoteLine.findMany({ where: { delivery_note_id: id } })
-    await prisma.$transaction([
-      ...lines.flatMap(line => [
-        prisma.part.update({ where: { id: line.part_id }, data: { stock_current: { decrement: line.quantity } } }),
-        prisma.stockMovement.create({
+    await prisma.$transaction(async (tx) => {
+      for (const line of lines) {
+        // Descontar de PartLocations en orden descendente de stock
+        const locs = await tx.partLocation.findMany({
+          where: { part_id: line.part_id, stock: { gt: 0 } },
+          orderBy: { stock: 'desc' }
+        })
+        let remaining = line.quantity
+        for (const loc of locs) {
+          if (remaining <= 0) break
+          const deduct = Math.min(loc.stock, remaining)
+          await tx.partLocation.update({ where: { id: loc.id }, data: { stock: { decrement: deduct } } })
+          remaining -= deduct
+        }
+        // Recalcular stock_current desde PartLocation
+        const agg = await tx.partLocation.aggregate({ where: { part_id: line.part_id }, _sum: { stock: true } })
+        await tx.part.update({ where: { id: line.part_id }, data: { stock_current: agg._sum.stock || 0 } })
+        await tx.stockMovement.create({
           data: {
             part_id: line.part_id, type: 'OUT', quantity: line.quantity,
             reference_type: 'DELIVERY', reference_id: id,
             notes: `Albarán ALB-${id}`,
           }
         })
-      ])
-    ])
+      }
+    })
   }
 
   await prisma.deliveryNoteEvent.create({ data: { delivery_note_id: id, status: 'SHIPPED' } })
