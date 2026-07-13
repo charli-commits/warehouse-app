@@ -55,7 +55,9 @@ async function runMigrations() {
   }
 }
 
+// Never exit(1) — if migrations fail, log the warning and let the server
+// start anyway. A genuine DB problem will surface on the first query.
 runMigrations().catch(err => {
-  console.error('[migrate] Fatal connection error:', err.message)
-  process.exit(1)
+  console.warn('[migrate] Warning — could not run migrations:', err.message)
+  console.warn('[migrate] Server will start anyway; manual intervention may be needed.')
 })
