@@ -366,18 +366,24 @@ router.post('/:id/receive', async (req, res) => {
     return res.status(409).json({ error: 'Order already closed' })
   }
 
-  const ops = []
-  for (const recv of lines) {
-    const line = order.lines.find(l => l.id === Number(recv.line_id))
-    if (!line || Number(recv.quantity_received) <= 0) continue
-    const qty = Number(recv.quantity_received)
-    ops.push(
-      prisma.purchaseOrderLine.update({ where: { id: line.id }, data: { quantity_received: { increment: qty } } }),
-      prisma.part.update({ where: { id: line.part_id }, data: { stock_current: { increment: qty } } }),
-      prisma.stockMovement.create({ data: { part_id: line.part_id, type: 'IN', quantity: qty, reference_type: 'PURCHASE', reference_id: id, notes: notes || `Recepción OC-${id}` } })
-    )
-  }
-  await prisma.$transaction(ops)
+  await prisma.$transaction(async (tx) => {
+    for (const recv of lines) {
+      const line = order.lines.find(l => l.id === Number(recv.line_id))
+      if (!line || Number(recv.quantity_received) <= 0) continue
+      const qty = Number(recv.quantity_received)
+      const part_id = line.part_id
+      await tx.purchaseOrderLine.update({ where: { id: line.id }, data: { quantity_received: { increment: qty } } })
+      // Upsert PartLocation (ubicación genérica "ALMACÉN" para recepciones sin ubicación)
+      await tx.partLocation.upsert({
+        where: { part_id_location: { part_id, location: 'ALMACÉN' } },
+        update: { stock: { increment: qty } },
+        create: { part_id, location: 'ALMACÉN', stock: qty }
+      })
+      const agg = await tx.partLocation.aggregate({ where: { part_id }, _sum: { stock: true } })
+      await tx.part.update({ where: { id: part_id }, data: { stock_current: agg._sum.stock || 0 } })
+      await tx.stockMovement.create({ data: { part_id, type: 'IN', quantity: qty, reference_type: 'PURCHASE', reference_id: id, notes: notes || `Recepción OC-${id}` } })
+    }
+  })
 
   const updatedLines = await prisma.purchaseOrderLine.findMany({ where: { purchase_order_id: id } })
   const allReceived = updatedLines.every(l => l.quantity_received >= l.quantity_ordered)

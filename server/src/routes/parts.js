@@ -495,13 +495,20 @@ router.post('/:id/scrap', async (req, res) => {
         }
       }
 
-      // Recalcular stock_current
+      if (!location) {
+        // Sin ubicación: descontar de PartLocations (mayor stock primero)
+        const locs = await tx.partLocation.findMany({ where: { part_id, stock: { gt: 0 } }, orderBy: { stock: 'desc' } })
+        let remaining = qty
+        for (const loc of locs) {
+          if (remaining <= 0) break
+          const deduct = Math.min(loc.stock, remaining)
+          await tx.partLocation.update({ where: { id: loc.id }, data: { stock: { decrement: deduct } } })
+          remaining -= deduct
+        }
+      }
+      // Recalcular stock_current desde suma de PartLocation (siempre)
       const agg = await tx.partLocation.aggregate({ where: { part_id }, _sum: { stock: true } })
-      const newStock = location ? (agg._sum.stock || 0) : undefined
-      await tx.part.update({
-        where: { id: part_id },
-        data: { stock_current: location ? newStock : { decrement: qty } }
-      })
+      await tx.part.update({ where: { id: part_id }, data: { stock_current: agg._sum.stock || 0 } })
 
       await tx.stockMovement.create({
         data: {
@@ -624,7 +631,14 @@ router.post('/:id/adjust', async (req, res) => {
       const agg = await tx.partLocation.aggregate({ where: { part_id: id }, _sum: { stock: true } })
       await tx.part.update({ where: { id }, data: { stock_current: agg._sum.stock || 0 } })
     } else {
-      await tx.part.update({ where: { id }, data: { stock_current: { increment: quantity } } })
+      // Sin ubicación: upsert en ALMACÉN para mantener PartLocation sincronizado
+      await tx.partLocation.upsert({
+        where: { part_id_location: { part_id: id, location: 'ALMACÉN' } },
+        update: { stock: { increment: quantity } },
+        create: { part_id: id, location: 'ALMACÉN', stock: quantity }
+      })
+      const agg = await tx.partLocation.aggregate({ where: { part_id: id }, _sum: { stock: true } })
+      await tx.part.update({ where: { id }, data: { stock_current: agg._sum.stock || 0 } })
     }
     movement = await tx.stockMovement.create({
       data: {

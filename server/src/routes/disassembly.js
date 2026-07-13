@@ -90,11 +90,9 @@ router.post('/', async (req, res) => {
           create: { part_id: partId, location, stock: qty }
         })
 
-        // Update Part.stock_current
-        await tx.part.update({
-          where: { id: partId },
-          data: { stock_current: { increment: qty } }
-        })
+        // Recalculate stock_current from PartLocation sum
+        const agg = await tx.partLocation.aggregate({ where: { part_id: partId }, _sum: { stock: true } })
+        await tx.part.update({ where: { id: partId }, data: { stock_current: agg._sum.stock || 0 } })
 
         // Stock movement
         await tx.stockMovement.create({
