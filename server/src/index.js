@@ -82,4 +82,13 @@ if (process.env.NODE_ENV === 'production') {
 }
 
 const PORT = process.env.PORT || 3001
-app.listen(PORT, () => console.log(`Server running on http://localhost:${PORT}`))
+const server = app.listen(PORT, () => console.log(`Server running on http://localhost:${PORT}`))
+
+// Graceful shutdown — exit 0 so Render doesn't report spin-down as failure
+process.on('SIGTERM', () => {
+  console.log('SIGTERM received, shutting down gracefully')
+  server.close(() => process.exit(0))
+})
+process.on('SIGINT', () => {
+  server.close(() => process.exit(0))
+})
