@@ -484,7 +484,7 @@ router.post('/:id/ship', async (req, res) => {
     try {
       const addr = note.shipping_address ? JSON.parse(note.shipping_address) : {}
       const result = await glsClient.createShipment({
-        ref: `${note.client_ref || `ALB-${note.id}`}-${Date.now()}`,
+        ref: `ALB-${note.id}${note.client_ref ? `-${note.client_ref}` : ''}`,
         parcels: note.parcels || 1,
         retorno: note.gls_retorno ? 1 : 0,
         glsHorario: note.gls_horario,
