@@ -383,6 +383,7 @@ export default function Deliveries() {
   const [shippingId, setShippingId] = useState(null)
   const [shipCarrier, setShipCarrier] = useState('')
   const [shipParcels, setShipParcels] = useState(1)
+  const [detailShipParcels, setDetailShipParcels] = useState(1)
   const [editTrackingId, setEditTrackingId] = useState(null)
   const [editTrackingVal, setEditTrackingVal] = useState('')
   const [users, setUsers] = useState([])
@@ -422,9 +423,10 @@ export default function Deliveries() {
     catch (err) { alert(err.message) }
   }
 
-  async function handleShip(id, carrier) {
+  async function handleShip(id, carrier, parcels) {
     try {
-      if (shipParcels > 1) await api.updateDelivery(id, { parcels: shipParcels })
+      const p = parcels ?? shipParcels
+      if (p > 1) await api.updateDelivery(id, { parcels: p })
       await api.shipDelivery(id, { carrier })
       setShippingId(null); setShipCarrier(''); setShipParcels(1)
       load()
@@ -1010,14 +1012,34 @@ export default function Deliveries() {
                   </div>
                 )}
                 {(n.status === 'CONFIRMED' || n.status === 'READY') && (
-                  <div className="space-y-2">
-                    <p className="text-xs text-gray-500">Selecciona el transportista para marcar como enviado:</p>
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-3">
+                      <span className="text-xs text-gray-500 font-medium">Bultos:</span>
+                      <div className="flex items-center border border-gray-300 rounded-md overflow-hidden">
+                        <button
+                          onClick={() => setDetailShipParcels(p => Math.max(1, p - 1))}
+                          className="px-2.5 py-1 text-gray-500 hover:bg-gray-100 text-sm font-bold">−</button>
+                        <span className="px-3 py-1 text-sm font-semibold min-w-[2rem] text-center">{detailShipParcels}</span>
+                        <button
+                          onClick={() => setDetailShipParcels(p => Math.min(20, p + 1))}
+                          className="px-2.5 py-1 text-gray-500 hover:bg-gray-100 text-sm font-bold">+</button>
+                      </div>
+                      {detailShipParcels > 1 && (
+                        <span className="text-xs text-purple-600 font-medium">{detailShipParcels} etiquetas GLS</span>
+                      )}
+                    </div>
                     <div className="grid grid-cols-2 gap-2">
-                      <button onClick={() => { handleShip(n.id, 'GLS'); setDetailNote(null) }}
+                      <button onClick={async () => {
+                          await handleShip(n.id, 'GLS', detailShipParcels)
+                          setDetailNote(null); setDetailShipParcels(1)
+                        }}
                         className="bg-purple-600 hover:bg-purple-700 text-white text-sm font-bold py-2.5 rounded-md">
-                        GLS
+                        GLS {detailShipParcels > 1 ? `(${detailShipParcels} bultos)` : ''}
                       </button>
-                      <button onClick={() => { handleShip(n.id, 'DACHSER'); setDetailNote(null) }}
+                      <button onClick={async () => {
+                          await handleShip(n.id, 'DACHSER', 1)
+                          setDetailNote(null); setDetailShipParcels(1)
+                        }}
                         className="bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold py-2.5 rounded-md">
                         DACHSER
                       </button>
