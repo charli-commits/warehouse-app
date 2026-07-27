@@ -13,6 +13,51 @@ fs.mkdirSync(LABELS_DIR, { recursive: true })
 const SUPABASE_URL = process.env.SUPABASE_URL || 'https://wtpaggzdwhpxxtatcpxo.supabase.co'
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY || ''
 
+// Deletes GLS label files (Supabase + local) for deliveries marked DELIVERED > 1 month ago.
+// The albaran record and packing list are kept — only the label PDF is removed.
+async function cleanupOldLabels() {
+  const cutoff = new Date()
+  cutoff.setMonth(cutoff.getMonth() - 1)
+
+  const old = await prisma.deliveryNote.findMany({
+    where: { status: 'DELIVERED', gls_label_url: { not: null }, shipped_at: { lt: cutoff } },
+    select: { id: true, gls_label_url: true }
+  })
+
+  let deleted = 0
+  for (const note of old) {
+    try {
+      const url = note.gls_label_url
+      if (url.startsWith('http')) {
+        // Supabase: extract filename and delete via Storage API
+        const filename = url.split('/labels/').pop()
+        if (filename && SUPABASE_KEY) {
+          await fetch(`${SUPABASE_URL}/storage/v1/object/labels/${filename}`, {
+            method: 'DELETE',
+            headers: { Authorization: `Bearer ${SUPABASE_KEY}`, apikey: SUPABASE_KEY }
+          })
+        }
+      } else {
+        // Local file
+        const localPath = path.join(__dirname, '..', '..', url)
+        if (fs.existsSync(localPath)) fs.unlinkSync(localPath)
+      }
+      // Remove from in-memory cache
+      labelCache.delete(url)
+      // Clear URL in DB
+      await prisma.deliveryNote.update({ where: { id: note.id }, data: { gls_label_url: null } })
+      deleted++
+    } catch (e) {
+      console.warn(`[cleanup] Could not delete label for ALB-${note.id}:`, e.message)
+    }
+  }
+  console.log(`[cleanup] Removed ${deleted} old label(s) (${old.length} candidates, cutoff ${cutoff.toLocaleDateString('es-ES')})`)
+  return { deleted, candidates: old.length }
+}
+
+// Run cleanup on every server startup (safe — idempotent)
+cleanupOldLabels().catch(e => console.warn('[cleanup] Startup cleanup failed:', e.message))
+
 // In-memory cache for Supabase label PDFs — avoids re-downloading the same
 // file from Supabase on every etiquetas-pdf request (reduces egress).
 // Max 200 entries; evict oldest when full.
@@ -107,6 +152,20 @@ router.get('/', async (req, res) => {
     orderBy: { created_at: 'desc' }
   })
   res.json(notes)
+})
+
+// POST /api/deliveries/cleanup-labels — manual/cron trigger (protected by x-cron-secret)
+router.post('/cleanup-labels', async (req, res) => {
+  const cronSecret = process.env.CRON_SECRET
+  if (cronSecret && req.headers['x-cron-secret'] !== cronSecret) {
+    return res.status(403).json({ error: 'Forbidden' })
+  }
+  try {
+    const result = await cleanupOldLabels()
+    res.json({ ok: true, ...result })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
 })
 
 // GET /api/deliveries/resumen-cierre — PDF resumen de albaranes SHIPPED
