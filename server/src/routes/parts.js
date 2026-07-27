@@ -144,7 +144,7 @@ router.get('/', async (req, res) => {
 
   const include = { locations: { orderBy: { location: 'asc' } } }
   const page = Math.max(1, parseInt(req.query.page) || 1)
-  const pageSize = Math.min(200, Math.max(1, parseInt(req.query.page_size) || 50))
+  const pageSize = Math.min(500, Math.max(1, parseInt(req.query.page_size) || 50))
 
   if (sort === 'most_demanded') {
     // Aggregate OUT quantity per part, then filter/sort/paginate in memory

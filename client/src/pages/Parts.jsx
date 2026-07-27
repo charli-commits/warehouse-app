@@ -28,7 +28,7 @@ export default function Parts() {
   const location = searchParams.get('location') || ''
   const sort = searchParams.get('sort') || ''
   const page = Math.max(1, parseInt(searchParams.get('page')) || 1)
-  const pageSize = 50
+  const pageSize = 250
 
   // Debounce: replace current URL entry so back button skips intermediate states
   useEffect(() => {
