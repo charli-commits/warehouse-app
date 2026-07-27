@@ -18,7 +18,7 @@ router.get('/', async (req, res) => {
           { description: { contains: query, mode: 'insensitive' } },
         ]
       },
-      select: { id: true, code: true, name: true, category: true, stock_current: true, unit: true },
+      select: { id: true, code: true, name: true, category: true, stock_current: true, unit: true, image_url: true },
       take: 8,
     }),
     prisma.purchaseOrder.findMany({

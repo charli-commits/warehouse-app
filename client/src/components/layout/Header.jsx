@@ -1,6 +1,49 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { api } from '../../lib/api'
+
+function PartResultRow({ p, onClick }) {
+  const [imgOpen, setImgOpen] = useState(false)
+  const imgRef = useRef()
+
+  useEffect(() => {
+    if (!imgOpen) return
+    function handler(e) {
+      if (!imgRef.current?.contains(e.target)) setImgOpen(false)
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [imgOpen])
+
+  return (
+    <div className="relative flex items-center gap-3 px-4 py-2.5 hover:bg-blue-50 group">
+      {/* Thumbnail / placeholder */}
+      <div className="shrink-0 w-8 h-8 rounded border border-gray-200 overflow-hidden bg-gray-100 flex items-center justify-center"
+        onClick={e => { e.stopPropagation(); if (p.image_url) setImgOpen(v => !v) }}>
+        {p.image_url
+          ? <img src={p.image_url} alt="" className="w-full h-full object-cover cursor-zoom-in" />
+          : <span className="text-gray-300 text-xs">—</span>}
+      </div>
+
+      {/* Popover imagen grande */}
+      {imgOpen && p.image_url && (
+        <div ref={imgRef}
+          className="absolute left-12 top-0 z-[100] bg-white border border-gray-200 rounded-xl shadow-2xl p-1.5"
+          onClick={e => e.stopPropagation()}>
+          <img src={p.image_url} alt={p.name}
+            className="max-w-[280px] max-h-[280px] object-contain rounded-lg" />
+        </div>
+      )}
+
+      {/* Row clickable area */}
+      <button onClick={onClick} className="flex flex-1 items-center gap-3 min-w-0 text-left">
+        <span className="font-mono text-xs text-gray-400 w-24 shrink-0 truncate">{p.code}</span>
+        <span className="flex-1 text-sm text-gray-900 truncate">{p.name}</span>
+        <span className="text-xs text-gray-400 shrink-0">{p.stock_current} {p.unit}</span>
+      </button>
+    </div>
+  )
+}
 
 export default function Header() {
   const navigate = useNavigate()
@@ -96,15 +139,7 @@ export default function Header() {
                   <div>
                     <div className="px-4 py-1.5 text-xs font-semibold text-gray-400 uppercase tracking-wide bg-gray-50 border-b">Piezas</div>
                     {results.parts.map(p => (
-                      <button
-                        key={p.id}
-                        onClick={() => goTo(`/parts/${p.id}`)}
-                        className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-blue-50 text-left"
-                      >
-                        <span className="font-mono text-xs text-gray-400 w-24 shrink-0 truncate">{p.code}</span>
-                        <span className="flex-1 text-sm text-gray-900 truncate">{p.name}</span>
-                        <span className="text-xs text-gray-400 shrink-0">{p.stock_current} {p.unit}</span>
-                      </button>
+                      <PartResultRow key={p.id} p={p} onClick={() => goTo(`/parts/${p.id}`)} />
                     ))}
                   </div>
                 )}
