@@ -588,7 +588,7 @@ export default function Deliveries() {
         className="hover:bg-blue-50 cursor-pointer transition-colors">
         <td className="px-4 py-2.5 whitespace-nowrap">
           <span className="font-mono text-xs font-semibold text-gray-600">ALB-{note.id}</span>
-          <div className="text-xs text-gray-400">{new Date(note.created_at).toLocaleDateString('es-ES')}</div>
+          <div className="text-xs text-gray-400">{new Date(note.created_at).toLocaleString('es-ES', { dateStyle: 'short', timeStyle: 'short' })}</div>
         </td>
         <td className="px-4 py-2.5 max-w-[220px]">
           <div className="font-medium text-gray-800 truncate">{note.odoo_partner_name || '—'}</div>
@@ -885,7 +885,7 @@ export default function Deliveries() {
               {/* Header */}
               <div className="flex items-start justify-between p-6 border-b border-gray-100">
                 <div>
-                  <div className="text-xs font-mono text-gray-400 mb-0.5">ALB-{n.id} · {new Date(n.created_at).toLocaleDateString('es-ES')}{n.client_ref && <span className="ml-2 text-blue-400">{n.client_ref}</span>}{n.createdBy && <span className="ml-2 text-gray-400">· {n.createdBy.name}</span>}</div>
+                  <div className="text-xs font-mono text-gray-400 mb-0.5">ALB-{n.id} · {new Date(n.created_at).toLocaleString('es-ES', { dateStyle: 'short', timeStyle: 'short' })}{n.client_ref && <span className="ml-2 text-blue-400">{n.client_ref}</span>}{n.createdBy && <span className="ml-2 text-gray-400">· {n.createdBy.name}</span>}</div>
                   <h2 className="text-lg font-bold text-gray-900">{n.odoo_partner_name || '—'}</h2>
                 </div>
                 <div className="flex items-center gap-3">
