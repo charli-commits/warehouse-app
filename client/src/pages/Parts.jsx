@@ -6,6 +6,7 @@ import { getPermissions } from '../lib/permissions'
 import Modal from '../components/ui/Modal'
 import StockBadge from '../components/ui/StockBadge'
 import PartForm from '../components/PartForm'
+import PartPanel from '../components/PartPanel'
 
 export default function Parts() {
   const { user } = useAuth()
@@ -19,6 +20,7 @@ export default function Parts() {
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
   const [editing, setEditing] = useState(null)
+  const [panelId, setPanelId] = useState(null)
   const [searchInput, setSearchInput] = useState(searchParams.get('search') || '')
 
   const search = searchParams.get('search') || ''
@@ -176,7 +178,9 @@ export default function Parts() {
             ) : parts.length === 0 ? (
               <tr><td colSpan={sort === 'most_demanded' ? 10 : 9} className="px-4 py-8 text-center text-gray-400">No hay piezas</td></tr>
             ) : parts.map(part => (
-              <tr key={part.id} className="hover:bg-gray-50">
+              <tr key={part.id}
+                onClick={() => setPanelId(part.id)}
+                className="hover:bg-blue-50 cursor-pointer transition-colors">
                 <td className="px-4 py-3 font-mono text-gray-700">{part.code}</td>
                 <td className="px-4 py-3">
                   <div className="flex items-center gap-3">
@@ -185,7 +189,7 @@ export default function Parts() {
                       : <div className="w-10 h-10 rounded border border-gray-100 bg-gray-50 shrink-0" />
                     }
                     <div>
-                      <Link to={`/parts/${part.id}`} className="font-medium text-blue-600 hover:underline">{part.name}</Link>
+                      <span className="font-medium text-gray-900">{part.name}</span>
                       {part.odoo_product_name && <p className="text-xs text-gray-400 mt-0.5">Odoo: {part.odoo_product_name}</p>}
                     </div>
                   </div>
@@ -212,7 +216,7 @@ export default function Parts() {
                 <td className="px-4 py-3 text-right text-gray-500">{part.stock_min} {part.unit}</td>
                 {sort === 'most_demanded' && <td className="px-4 py-3 text-right font-medium text-blue-700">{part.shipped_qty}</td>}
                 <td className="px-4 py-3"><StockBadge current={part.stock_current} min={part.stock_min} /></td>
-                <td className="px-4 py-3 text-right">
+                <td className="px-4 py-3 text-right" onClick={e => e.stopPropagation()}>
                   {perm.parts.edit && <button onClick={() => openEdit(part)} className="text-gray-400 hover:text-blue-600 mr-3 text-xs font-medium">Editar</button>}
                   {perm.parts.delete && <button onClick={() => handleDelete(part.id)} className="text-gray-400 hover:text-red-600 text-xs font-medium">Eliminar</button>}
                 </td>
@@ -229,8 +233,8 @@ export default function Parts() {
         ) : parts.length === 0 ? (
           <div className="text-center py-8 text-gray-400 text-sm">No hay piezas</div>
         ) : parts.map(part => (
-          <Link key={part.id} to={`/parts/${part.id}`}
-            className="flex items-center gap-3 bg-white rounded-xl border border-gray-200 p-3 active:bg-gray-50">
+          <button key={part.id} onClick={() => setPanelId(part.id)}
+            className="w-full flex items-center gap-3 bg-white rounded-xl border border-gray-200 p-3 active:bg-gray-50 text-left">
             {part.image_url
               ? <img src={part.image_url} alt="" className="w-14 h-14 object-cover rounded-lg border border-gray-200 shrink-0" />
               : <div className="w-14 h-14 rounded-lg border border-gray-100 bg-gray-50 shrink-0 flex items-center justify-center text-gray-300 text-xl">⬡</div>
@@ -252,7 +256,7 @@ export default function Parts() {
                 <span className="text-xs text-gray-400">mín. {part.stock_min}</span>
               </div>
             </div>
-          </Link>
+          </button>
         ))}
       </div>
 
@@ -272,6 +276,8 @@ export default function Parts() {
           <PartForm initial={editing} onSave={handleSave} onCancel={closeForm} />
         </Modal>
       )}
+
+      {panelId && <PartPanel partId={panelId} onClose={() => setPanelId(null)} />}
     </div>
   )
 }
