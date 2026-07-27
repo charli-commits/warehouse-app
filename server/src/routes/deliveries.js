@@ -692,8 +692,13 @@ router.get('/:id/packing-list', async (req, res) => {
     doc.on('end', () => resolve(Buffer.concat(chunks)))
     doc.on('error', reject)
 
-    // Header
-    doc.fontSize(20).font('Helvetica-Bold').fillColor('#000').text('ALBARÁN DE SALIDA', M, M)
+    // Header — logo right, title left
+    const LOGO_W = 110, LOGO_H = 83
+    const logoPath = path.join(__dirname, '..', 'assets', 'logo.png')
+    if (fs.existsSync(logoPath)) {
+      doc.image(logoPath, M + PW - LOGO_W, M, { width: LOGO_W, height: LOGO_H })
+    }
+    doc.fontSize(20).font('Helvetica-Bold').fillColor('#000').text('ALBARÁN DE SALIDA', M, M, { width: PW - LOGO_W - 10 })
     doc.fontSize(10).font('Helvetica').fillColor('#666').text(`${ref}  ·  ${dateStr}`, M, M + 28)
     if (note.client_ref) doc.text(`Ref. pedido: ${note.client_ref}`, M, M + 42)
     if (note.carrier) doc.text(`Transportista: ${note.carrier}${note.gls_tracking ? `  ·  ${note.gls_tracking}` : ''}`, M, M + (note.client_ref ? 56 : 42))
