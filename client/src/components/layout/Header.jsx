@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { api } from '../../lib/api'
+import { useTheme } from '../../lib/ThemeContext'
 
 function PartResultRow({ p, onClick }) {
   const [imgOpen, setImgOpen] = useState(false)
@@ -46,6 +47,7 @@ function PartResultRow({ p, onClick }) {
 }
 
 export default function Header() {
+  const { dark, toggle } = useTheme()
   const navigate = useNavigate()
   const [status, setStatus] = useState(null)
   const [syncing, setSyncing] = useState(false)
@@ -113,7 +115,7 @@ export default function Header() {
     : 'Nunca'
 
   return (
-    <header className="hidden md:flex bg-white border-b border-gray-200 px-6 py-3 items-center justify-between gap-4">
+    <header className="hidden md:flex bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700 px-6 py-3 items-center justify-between gap-4">
       {/* Global search */}
       <div className="relative flex-1 max-w-md" ref={searchRef}>
         <div className="relative">
@@ -124,20 +126,20 @@ export default function Header() {
             onChange={e => handleSearch(e.target.value)}
             onFocus={() => { if (results && query.length >= 2) setShowResults(true) }}
             placeholder="Buscar pieza, OC, albarán…"
-            className="w-full pl-8 pr-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            className="w-full pl-8 pr-3 py-2 border border-gray-200 dark:border-gray-600 rounded-lg text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           />
           {searching && <span className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-300 text-xs">…</span>}
         </div>
 
         {showResults && (
-          <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-xl z-50 overflow-hidden max-h-[480px] overflow-y-auto">
+          <div className="absolute top-full left-0 right-0 mt-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg shadow-xl z-50 overflow-hidden max-h-[480px] overflow-y-auto">
             {!hasResults ? (
-              <div className="px-4 py-6 text-center text-sm text-gray-400">Sin resultados para "{query}"</div>
+              <div className="px-4 py-6 text-center text-sm text-gray-400 dark:text-gray-500">Sin resultados para "{query}"</div>
             ) : (
               <>
                 {results.parts.length > 0 && (
                   <div>
-                    <div className="px-4 py-1.5 text-xs font-semibold text-gray-400 uppercase tracking-wide bg-gray-50 border-b">Piezas</div>
+                    <div className="px-4 py-1.5 text-xs font-semibold text-gray-400 uppercase tracking-wide bg-gray-50 dark:bg-gray-700 dark:text-gray-400 border-b dark:border-gray-600">Piezas</div>
                     {results.parts.map(p => (
                       <PartResultRow key={p.id} p={p} onClick={() => goTo(`/parts/${p.id}`)} />
                     ))}
@@ -145,32 +147,26 @@ export default function Header() {
                 )}
                 {results.purchases.length > 0 && (
                   <div>
-                    <div className="px-4 py-1.5 text-xs font-semibold text-gray-400 uppercase tracking-wide bg-gray-50 border-b">Órdenes de compra</div>
+                    <div className="px-4 py-1.5 text-xs font-semibold text-gray-400 uppercase tracking-wide bg-gray-50 dark:bg-gray-700 dark:text-gray-400 border-b dark:border-gray-600">Órdenes de compra</div>
                     {results.purchases.map(o => (
-                      <button
-                        key={o.id}
-                        onClick={() => goTo(`/purchases/${o.id}`)}
-                        className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-blue-50 text-left"
-                      >
-                        <span className="text-sm font-medium text-gray-900 w-32 shrink-0">{o.reference || `#${o.id}`}</span>
-                        <span className="flex-1 text-xs text-gray-500 truncate">{o.supplier?.name}</span>
-                        <span className="text-xs text-gray-400 shrink-0">{STATUS_LABELS[o.status] || o.status}</span>
+                      <button key={o.id} onClick={() => goTo(`/purchases/${o.id}`)}
+                        className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-blue-50 dark:hover:bg-gray-700 text-left">
+                        <span className="text-sm font-medium text-gray-900 dark:text-gray-100 w-32 shrink-0">{o.reference || `#${o.id}`}</span>
+                        <span className="flex-1 text-xs text-gray-500 dark:text-gray-400 truncate">{o.supplier?.name}</span>
+                        <span className="text-xs text-gray-400 dark:text-gray-500 shrink-0">{STATUS_LABELS[o.status] || o.status}</span>
                       </button>
                     ))}
                   </div>
                 )}
                 {results.deliveries.length > 0 && (
                   <div>
-                    <div className="px-4 py-1.5 text-xs font-semibold text-gray-400 uppercase tracking-wide bg-gray-50 border-b">Albaranes</div>
+                    <div className="px-4 py-1.5 text-xs font-semibold text-gray-400 uppercase tracking-wide bg-gray-50 dark:bg-gray-700 dark:text-gray-400 border-b dark:border-gray-600">Albaranes</div>
                     {results.deliveries.map(d => (
-                      <button
-                        key={d.id}
-                        onClick={() => goTo(`/deliveries`)}
-                        className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-blue-50 text-left"
-                      >
-                        <span className="text-sm font-medium text-gray-900 flex-1 truncate">{d.odoo_partner_name || '—'}</span>
-                        <span className="text-xs text-gray-400 shrink-0">{d.client_ref || ''}</span>
-                        <span className="text-xs text-gray-400 shrink-0">{STATUS_LABELS[d.status] || d.status}</span>
+                      <button key={d.id} onClick={() => goTo(`/deliveries`)}
+                        className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-blue-50 dark:hover:bg-gray-700 text-left">
+                        <span className="text-sm font-medium text-gray-900 dark:text-gray-100 flex-1 truncate">{d.odoo_partner_name || '—'}</span>
+                        <span className="text-xs text-gray-400 dark:text-gray-500 shrink-0">{d.client_ref || ''}</span>
+                        <span className="text-xs text-gray-400 dark:text-gray-500 shrink-0">{STATUS_LABELS[d.status] || d.status}</span>
                       </button>
                     ))}
                   </div>
@@ -182,11 +178,15 @@ export default function Header() {
       </div>
 
       <div className="flex items-center gap-4 shrink-0">
+        <button onClick={toggle} title={dark ? 'Modo claro' : 'Modo oscuro'}
+          className="w-8 h-8 flex items-center justify-center rounded-md text-gray-400 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors text-base">
+          {dark ? '☀️' : '🌙'}
+        </button>
         {error && <span className="text-xs text-red-500">{error}</span>}
-        <div className="text-xs text-gray-500">
+        <div className="text-xs text-gray-500 dark:text-gray-400">
           Última sync Odoo: <span className="font-medium text-gray-700">{lastSync}</span>
           {status?.cached_products != null && (
-            <span className="ml-2 text-gray-400">({status.cached_products} productos · {status.cached_partners} clientes)</span>
+            <span className="ml-2 text-gray-400 dark:text-gray-500">({status.cached_products} productos · {status.cached_partners} clientes)</span>
           )}
         </div>
         <button

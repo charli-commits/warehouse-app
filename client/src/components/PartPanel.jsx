@@ -28,9 +28,9 @@ export default function PartPanel({ partId, onClose }) {
       <div className="fixed inset-0 z-40 bg-black/20" onClick={onClose} />
 
       {/* Panel */}
-      <div className="fixed right-0 top-0 h-full z-50 w-full max-w-sm bg-white shadow-2xl flex flex-col animate-slide-in-right">
+      <div className="fixed right-0 top-0 h-full z-50 w-full max-w-sm bg-white dark:bg-gray-800 shadow-2xl flex flex-col animate-slide-in-right">
         {/* Header */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 dark:border-gray-700">
           <span className="font-mono text-sm text-gray-400">{part?.code || '—'}</span>
           <div className="flex items-center gap-3">
             {part && (

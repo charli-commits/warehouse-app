@@ -19,6 +19,7 @@ import AuditDetail from './pages/AuditDetail'
 import Reposicion from './pages/Reposicion'
 import Movements from './pages/Movements'
 import { AuthProvider, useAuth } from './lib/AuthContext'
+import { ThemeProvider } from './lib/ThemeContext'
 import { getPermissions } from './lib/permissions'
 
 // Redirige a /parts si el rol no tiene acceso a esa ruta
@@ -66,8 +67,10 @@ function AppShell() {
 
 export default function App() {
   return (
-    <AuthProvider>
-      <AppShell />
-    </AuthProvider>
+    <ThemeProvider>
+      <AuthProvider>
+        <AppShell />
+      </AuthProvider>
+    </ThemeProvider>
   )
 }

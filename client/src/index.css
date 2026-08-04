@@ -3,8 +3,50 @@
 @tailwind utilities;
 
 body {
-  @apply bg-gray-50 text-gray-900;
+  @apply bg-gray-50 text-gray-900 dark:bg-gray-950 dark:text-gray-100;
 }
+
+/* ── Dark mode global overrides ─────────────────────────────── */
+.dark {
+  /* Cards / panels */
+  --tw-bg-white: #1f2937;
+}
+
+/* Tables */
+.dark table thead { @apply bg-gray-800 border-gray-700; }
+.dark table thead th { @apply text-gray-300; }
+.dark table tbody tr { @apply border-gray-700; }
+.dark table tbody tr:hover { @apply bg-gray-800; }
+.dark table td, .dark table th { @apply border-gray-700; }
+.dark tbody.divide-y > tr { border-color: #374151; }
+
+/* Cards */
+.dark .bg-white { background-color: #1f2937; }
+.dark .bg-gray-50 { background-color: #111827; }
+.dark .bg-gray-100 { background-color: #374151; }
+
+/* Borders */
+.dark .border-gray-100 { border-color: #374151; }
+.dark .border-gray-200 { border-color: #374151; }
+.dark .border-gray-300 { border-color: #4b5563; }
+
+/* Text */
+.dark .text-gray-900 { color: #f3f4f6; }
+.dark .text-gray-800 { color: #e5e7eb; }
+.dark .text-gray-700 { color: #d1d5db; }
+.dark .text-gray-600 { color: #9ca3af; }
+.dark .text-gray-500 { color: #6b7280; }
+
+/* Inputs & selects */
+.dark input:not([type=checkbox]):not([type=radio]),
+.dark select,
+.dark textarea {
+  @apply bg-gray-700 border-gray-600 text-gray-100 placeholder-gray-400;
+}
+
+/* Hover rows */
+.dark .hover\:bg-gray-50:hover { background-color: #1f2937; }
+.dark .hover\:bg-blue-50:hover { background-color: #1e3a5f40; }
 
 @keyframes slide-in-right {
   from { transform: translateX(100%); }
