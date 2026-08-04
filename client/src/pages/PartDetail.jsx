@@ -564,7 +564,7 @@ export default function PartDetail() {
               <label className="block text-xs font-medium text-gray-600 mb-1">
                 Cantidad (positivo = entrada, negativo = salida)
               </label>
-              <input type="number" step="0.01" required value={adjustQty}
+              <input type="number" step="1" required value={adjustQty}
                 onChange={e => setAdjustQty(e.target.value)}
                 className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                 placeholder="Ej: 10 o -5" />
