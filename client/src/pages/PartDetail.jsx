@@ -356,7 +356,7 @@ export default function PartDetail() {
               <div className="w-24">
                 <label className="block text-xs font-medium text-gray-600 mb-1">Stock inicial</label>
                 <input
-                  type="number" min="0" step="0.01" value={newLocStock}
+                  type="number" min="0" step="1" value={newLocStock}
                   onChange={e => setNewLocStock(e.target.value)}
                   className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
               </div>
@@ -620,9 +620,9 @@ export default function PartDetail() {
                   return src ? <span className="text-gray-400 font-normal ml-1">(máx {src.stock} {part.unit})</span> : null
                 })()}
               </label>
-              <input type="number" min="0.01"
+              <input type="number" min="1"
                 max={scrapLocation ? part.locations?.find(l => l.location === scrapLocation)?.stock : part.stock_current}
-                step="0.01" value={scrapQty} onChange={e => setScrapQty(e.target.value)} required
+                step="1" value={scrapQty} onChange={e => setScrapQty(e.target.value)} required
                 className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-400" />
             </div>
             <div>
@@ -683,9 +683,9 @@ export default function PartDetail() {
                   return src ? <span className="text-gray-400 font-normal ml-1">(máx {src.stock} {part.unit})</span> : null
                 })()}
               </label>
-              <input type="number" min="0.01"
+              <input type="number" min="1"
                 max={part.locations?.find(l => l.location === transferFrom)?.stock}
-                step="0.01"
+                step="1"
                 value={transferQty} onChange={e => setTransferQty(e.target.value)}
                 required
                 className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
