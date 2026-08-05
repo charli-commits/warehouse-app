@@ -493,8 +493,10 @@ export default function Deliveries() {
   const [search, setSearch] = useState('')
   const [showResumenModal, setShowResumenModal] = useState(false)
   const [showEtiquetasModal, setShowEtiquetasModal] = useState(false)
+  const [showAlbaranesModal, setShowAlbaranesModal] = useState(false)
   const [resumenDate, setResumenDate] = useState(new Date().toISOString().slice(0, 10))
   const [etiquetasDate, setEtiquetasDate] = useState(new Date().toISOString().slice(0, 10))
+  const [albaranesDate, setAlbaranesDate] = useState(new Date().toISOString().slice(0, 10))
 
   async function handleEtiquetasPdf() {
     setShowEtiquetasModal(true)
@@ -510,6 +512,19 @@ export default function Deliveries() {
       const a = document.createElement('a')
       a.href = url; a.download = `etiquetas-${etiquetasDate}.pdf`; a.click()
       setShowEtiquetasModal(false)
+    } catch (err) { alert('Error: ' + err.message) }
+  }
+
+  async function downloadAlbaranes() {
+    try {
+      const token = JSON.parse(localStorage.getItem('wh_user') || '{}')?.token
+      const res = await fetch(`/api/deliveries/albaranes-pdf?date=${albaranesDate}`, { headers: { Authorization: `Bearer ${token}` } })
+      if (!res.ok) { const e = await res.json().catch(() => ({})); alert('Error al generar PDF: ' + (e.error || res.status)); return }
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url; a.download = `albaranes-${albaranesDate}.pdf`; a.click()
+      setShowAlbaranesModal(false)
     } catch (err) { alert('Error: ' + err.message) }
   }
 
@@ -666,6 +681,10 @@ export default function Deliveries() {
       <div className="flex items-center justify-between mb-3 md:mb-6">
         <h1 className="text-xl md:text-2xl font-bold text-gray-900">Albaranes</h1>
         <div className="flex items-center gap-2">
+          <button onClick={() => setShowAlbaranesModal(true)}
+            className="hidden md:block border border-gray-300 hover:border-blue-400 hover:text-blue-600 text-gray-600 text-sm font-medium px-4 py-2 rounded-md">
+            📄 Imprimir albaranes
+          </button>
           <button onClick={handleEtiquetasPdf}
             className="hidden md:block border border-gray-300 hover:border-blue-400 hover:text-blue-600 text-gray-600 text-sm font-medium px-4 py-2 rounded-md">
             🖨 Imprimir etiquetas
@@ -1100,6 +1119,26 @@ export default function Deliveries() {
         <Modal title={editing ? `Editar ALB-${editing.id}` : 'Nuevo albarán'}
           onClose={() => { setShowForm(false); setEditing(null) }} size="lg">
           <DeliveryForm initial={editing} onSave={handleSave} onCancel={() => { setShowForm(false); setEditing(null) }} />
+        </Modal>
+      )}
+      {showAlbaranesModal && (
+        <Modal title="Imprimir albaranes" onClose={() => setShowAlbaranesModal(false)}>
+          <div className="space-y-4 p-1">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Fecha de envío</label>
+              <input
+                type="date"
+                value={albaranesDate}
+                onChange={e => setAlbaranesDate(e.target.value)}
+                className="border rounded px-3 py-2 text-sm w-full"
+              />
+            </div>
+            <p className="text-xs text-gray-500">Se incluirán los albaranes de todos los envíos de ese día en un solo PDF.</p>
+            <div className="flex gap-2 justify-end">
+              <button onClick={() => setShowAlbaranesModal(false)} className="px-4 py-2 text-sm border rounded hover:bg-gray-50">Cancelar</button>
+              <button onClick={downloadAlbaranes} className="px-4 py-2 text-sm bg-blue-600 text-white rounded hover:bg-blue-700">Descargar PDF</button>
+            </div>
+          </div>
         </Modal>
       )}
       {showEtiquetasModal && (

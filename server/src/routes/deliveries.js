@@ -196,6 +196,49 @@ router.get('/resumen-cierre', async (req, res) => {
   }
 })
 
+// GET /api/deliveries/albaranes-pdf?date=YYYY-MM-DD — merged packing lists for a date
+router.get('/albaranes-pdf', async (req, res) => {
+  try {
+    const { date } = req.query
+    const where = { status: { in: ['SHIPPED', 'DELIVERED', 'READY'] } }
+    if (date) {
+      const start = new Date(date); start.setHours(0, 0, 0, 0)
+      const end   = new Date(date); end.setHours(23, 59, 59, 999)
+      where.shipped_at = { gte: start, lte: end }
+    }
+    const notes = await prisma.deliveryNote.findMany({
+      where,
+      include: { lines: { include: { part: { select: { id: true, code: true, name: true, unit: true } } } } },
+      orderBy: { id: 'asc' }
+    })
+    if (notes.length === 0)
+      return res.status(404).json({ error: date ? `No hay albaranes enviados el ${date}` : 'No hay albaranes' })
+
+    const merged = await PDFDocument.create()
+    for (const note of notes) {
+      try {
+        const fifoLocs = await getFifoLocs(note.lines.map(l => l.part_id).filter(Boolean))
+        const pdfBuf = await buildPackingListPDF(note, fifoLocs)
+        const doc = await PDFDocument.load(pdfBuf)
+        const pages = await merged.copyPages(doc, doc.getPageIndices())
+        pages.forEach(p => merged.addPage(p))
+      } catch (e) {
+        console.warn(`[albaranes-pdf] Skipped ALB-${note.id}:`, e.message)
+      }
+    }
+    if (merged.getPageCount() === 0)
+      return res.status(404).json({ error: 'No se pudieron generar los albaranes' })
+
+    const mergedBytes = await merged.save()
+    const suffix = date || new Date().toISOString().slice(0, 10)
+    res.setHeader('Content-Type', 'application/pdf')
+    res.setHeader('Content-Disposition', `attachment; filename="albaranes-${suffix}.pdf"`)
+    res.send(Buffer.from(mergedBytes))
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
 // GET /api/deliveries/etiquetas-pdf?date=YYYY-MM-DD — merged PDF of labels for a given date (shipped_at)
 router.get('/etiquetas-pdf', async (req, res) => {
   try {
@@ -700,49 +743,38 @@ router.post('/:id/label', express.raw({ type: 'application/pdf', limit: '10mb' }
   res.json(updated)
 })
 
-// POST /api/deliveries/:id/deliver — SHIPPED → DELIVERED
-// GET /api/deliveries/:id/packing-list — generate packing list PDF
-router.get('/:id/packing-list', async (req, res) => {
-  const id = Number(req.params.id)
-  const note = await prisma.deliveryNote.findUnique({
-    where: { id },
-    include: {
-      lines: { include: { part: { select: { id: true, code: true, name: true, unit: true } } } },
-      createdBy: { select: { name: true } }
-    }
-  })
-  if (!note) return res.status(404).json({ error: 'Albarán no encontrado' })
+// ── Helpers ────────────────────────────────────────────────────────────────────
 
-  // FIFO location for each part: oldest lot with stock > 0
-  const partIds = note.lines.map(l => l.part_id).filter(Boolean)
+async function getFifoLocs(partIds) {
   const fifoLocs = {}
-  if (partIds.length) {
-    const lotLocs = await prisma.lotLocation.findMany({
-      where: { stock: { gt: 0 }, lot: { part_id: { in: partIds } } },
-      include: { lot: { select: { part_id: true, created_at: true } } },
-      orderBy: { lot: { created_at: 'asc' } }
+  if (!partIds.length) return fifoLocs
+  const lotLocs = await prisma.lotLocation.findMany({
+    where: { stock: { gt: 0 }, lot: { part_id: { in: partIds } } },
+    include: { lot: { select: { part_id: true, created_at: true } } },
+    orderBy: { lot: { created_at: 'asc' } }
+  })
+  for (const ll of lotLocs) {
+    if (!fifoLocs[ll.lot.part_id]) fifoLocs[ll.lot.part_id] = ll.location
+  }
+  const noLot = partIds.filter(pid => !fifoLocs[pid])
+  if (noLot.length) {
+    const partLocs = await prisma.partLocation.findMany({
+      where: { part_id: { in: noLot }, stock: { gt: 0 } },
+      orderBy: { stock: 'desc' }
     })
-    for (const ll of lotLocs) {
-      if (!fifoLocs[ll.lot.part_id]) fifoLocs[ll.lot.part_id] = ll.location
-    }
-    // fallback: parts with no lots — use PartLocation with most stock
-    const noLot = partIds.filter(pid => !fifoLocs[pid])
-    if (noLot.length) {
-      const partLocs = await prisma.partLocation.findMany({
-        where: { part_id: { in: noLot }, stock: { gt: 0 } },
-        orderBy: { stock: 'desc' }
-      })
-      for (const pl of partLocs) {
-        if (!fifoLocs[pl.part_id]) fifoLocs[pl.part_id] = pl.location
-      }
+    for (const pl of partLocs) {
+      if (!fifoLocs[pl.part_id]) fifoLocs[pl.part_id] = pl.location
     }
   }
+  return fifoLocs
+}
 
+function buildPackingListPDF(note, fifoLocs) {
   const addr = note.shipping_address ? JSON.parse(note.shipping_address) : {}
   const dateStr = new Date(note.created_at).toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' })
   const ref = `ALB-${note.id}`
 
-  const buf = await new Promise((resolve, reject) => {
+  return new Promise((resolve, reject) => {
     const M = 50
     const PW = 595.28 - M * 2
     const doc = new PDFKit({ margin: M, size: 'A4' })
@@ -843,12 +875,28 @@ router.get('/:id/packing-list', async (req, res) => {
 
     doc.end()
   })
+}
 
-  res.setHeader('Content-Type', 'application/pdf')
-  res.setHeader('Content-Disposition', `attachment; filename="${ref}-packing-list.pdf"`)
-  res.send(buf)
+// GET /api/deliveries/:id/packing-list
+router.get('/:id/packing-list', async (req, res) => {
+  try {
+    const id = Number(req.params.id)
+    const note = await prisma.deliveryNote.findUnique({
+      where: { id },
+      include: { lines: { include: { part: { select: { id: true, code: true, name: true, unit: true } } } } }
+    })
+    if (!note) return res.status(404).json({ error: 'Albarán no encontrado' })
+    const fifoLocs = await getFifoLocs(note.lines.map(l => l.part_id).filter(Boolean))
+    const buf = await buildPackingListPDF(note, fifoLocs)
+    res.setHeader('Content-Type', 'application/pdf')
+    res.setHeader('Content-Disposition', `attachment; filename="ALB-${note.id}-packing-list.pdf"`)
+    res.send(buf)
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
 })
 
+// GET /api/deliveries/albaranes-pdf?date=YYYY-MM-DD — batch packing lists for a date
 router.post('/:id/deliver', async (req, res) => {
   const id = Number(req.params.id)
   const note = await prisma.deliveryNote.findUnique({ where: { id } })
