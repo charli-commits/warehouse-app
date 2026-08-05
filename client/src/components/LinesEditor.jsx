@@ -121,7 +121,7 @@ export default function LinesEditor({ lines, onChange, mode = 'purchase', manufa
               <input
                 type="number"
                 min="0.01"
-                step="0.01"
+                step="1"
                 value={line[qtyField]}
                 onChange={e => updateLine(i, qtyField, e.target.value)}
                 placeholder={qtyLabel}
@@ -133,7 +133,7 @@ export default function LinesEditor({ lines, onChange, mode = 'purchase', manufa
                 <input
                   type="number"
                   min="0"
-                  step="0.01"
+                  step="1"
                   value={line.unit_price}
                   onChange={e => updateLine(i, 'unit_price', e.target.value)}
                   placeholder="Precio/ud"
