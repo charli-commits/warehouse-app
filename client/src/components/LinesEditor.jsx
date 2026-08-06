@@ -120,7 +120,7 @@ export default function LinesEditor({ lines, onChange, mode = 'purchase', manufa
             <div className="w-24">
               <input
                 type="number"
-                min="0.01"
+                min="1"
                 step="1"
                 value={line[qtyField]}
                 onChange={e => updateLine(i, qtyField, e.target.value)}
