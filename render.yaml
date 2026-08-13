@@ -39,6 +39,16 @@ services:
         sync: false
       - key: GLS_SENDER_COUNTRY
         value: ES
+      - key: R2_ACCOUNT_ID
+        sync: false
+      - key: R2_ACCESS_KEY_ID
+        sync: false
+      - key: R2_SECRET_ACCESS_KEY
+        sync: false
+      - key: R2_BUCKET
+        value: warehouse-parts
+      - key: MIGRATE_TOKEN
+        value: mig-wh-2026-r2
 
 databases:
   - name: warehouse-db

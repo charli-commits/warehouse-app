@@ -3,9 +3,22 @@ const router = express.Router()
 const prisma = require('../lib/prisma')
 const multer = require('multer')
 const path = require('path')
+const { S3Client, PutObjectCommand, GetObjectCommand } = require('@aws-sdk/client-s3')
 
 const SUPABASE_URL = process.env.SUPABASE_URL || 'https://wtpaggzdwhpxxtatcpxo.supabase.co'
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY || ''
+
+// Cloudflare R2
+const R2_ACCOUNT_ID = process.env.R2_ACCOUNT_ID
+const R2_BUCKET = process.env.R2_BUCKET || 'warehouse-parts'
+const r2 = R2_ACCOUNT_ID ? new S3Client({
+  region: 'auto',
+  endpoint: `https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com`,
+  credentials: {
+    accessKeyId: process.env.R2_ACCESS_KEY_ID,
+    secretAccessKey: process.env.R2_SECRET_ACCESS_KEY,
+  },
+}) : null
 
 async function supabaseUpload(filename, buffer, mimetype) {
   const res = await fetch(`${SUPABASE_URL}/storage/v1/object/parts/${filename}`, {
@@ -27,6 +40,89 @@ const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 10 * 1024 * 1024 },
   fileFilter: (req, file, cb) => cb(null, /image\//.test(file.mimetype))
+})
+
+// POST /api/parts/migrate-to-r2 — internal migration endpoint (protected by token)
+router.post('/migrate-to-r2', async (req, res) => {
+  const token = req.headers['x-migrate-token']
+  if (token !== process.env.MIGRATE_TOKEN) return res.status(403).json({ error: 'forbidden' })
+  if (!r2) return res.status(500).json({ error: 'R2 no configurado' })
+
+  res.setHeader('Content-Type', 'text/plain; charset=utf-8')
+  res.setHeader('Transfer-Encoding', 'chunked')
+  res.flushHeaders()
+
+  const parts = await prisma.part.findMany({
+    where: { image_url: { not: null }, AND: [{ image_url: { startsWith: 'http' } }] },
+    select: { id: true, image_url: true },
+  })
+  res.write(`Encontradas ${parts.length} piezas con foto Supabase\n`)
+
+  let ok = 0, errors = 0
+  for (const part of parts) {
+    const ext = (part.image_url.split('?')[0].split('.').pop() || 'jpg').toLowerCase().slice(0, 4)
+    const key = `parts/${part.id}.${ext}`
+    try {
+      const r = await fetch(part.image_url)
+      if (!r.ok) throw new Error(`HTTP ${r.status}`)
+      const buf = Buffer.from(await r.arrayBuffer())
+      const ct = r.headers.get('content-type') || 'image/jpeg'
+      await r2.send(new PutObjectCommand({ Bucket: R2_BUCKET, Key: key, Body: buf, ContentType: ct }))
+      await prisma.part.update({ where: { id: part.id }, data: { image_url: `r2://${key}` } })
+      ok++
+      if (ok % 50 === 0) res.write(`  ${ok} migradas...\n`)
+    } catch (err) {
+      errors++
+      res.write(`  [${part.id}] ERROR: ${err.message}\n`)
+    }
+  }
+  res.write(`\nFIN: ${ok} OK, ${errors} errores\n`)
+  res.end()
+})
+
+// Photo proxy cache
+const photoCache = new Map()
+const PHOTO_CACHE_MAX = 300
+
+// GET /api/parts/:id/image — proxy foto (R2 o Supabase)
+router.get('/image/:id', async (req, res) => {
+  const id = Number(req.params.id)
+  if (!id) return res.status(400).end()
+
+  if (photoCache.has(id)) {
+    const { buf, contentType } = photoCache.get(id)
+    res.setHeader('Content-Type', contentType)
+    res.setHeader('Cache-Control', 'public, max-age=86400')
+    return res.send(buf)
+  }
+
+  const part = await prisma.part.findUnique({ where: { id }, select: { image_url: true } })
+  if (!part?.image_url) return res.status(404).end()
+
+  let buf, contentType
+  try {
+    if (part.image_url.startsWith('r2://') && r2) {
+      const key = part.image_url.slice(5)
+      const resp = await r2.send(new GetObjectCommand({ Bucket: R2_BUCKET, Key: key }))
+      const chunks = []
+      for await (const chunk of resp.Body) chunks.push(chunk)
+      buf = Buffer.concat(chunks)
+      contentType = resp.ContentType || 'image/jpeg'
+    } else {
+      const r = await fetch(part.image_url)
+      if (!r.ok) return res.status(r.status).end()
+      buf = Buffer.from(await r.arrayBuffer())
+      contentType = r.headers.get('content-type') || 'image/jpeg'
+    }
+  } catch (e) {
+    return res.status(502).end()
+  }
+
+  if (photoCache.size >= PHOTO_CACHE_MAX) photoCache.delete(photoCache.keys().next().value)
+  photoCache.set(id, { buf, contentType })
+  res.setHeader('Content-Type', contentType)
+  res.setHeader('Cache-Control', 'public, max-age=86400')
+  res.send(buf)
 })
 
 // GET /api/parts/stats — must come before /:id
