@@ -185,7 +185,7 @@ export default function Parts() {
                 <td className="px-4 py-3">
                   <div className="flex items-center gap-3">
                     {part.image_url
-                      ? <img src={part.image_url} alt="" onError={e => { e.target.style.display = 'none' }} className="w-10 h-10 object-cover rounded border border-gray-200 shrink-0" />
+                      ? <img src={`/api/parts/image/${part.id}`} alt="" onError={e => { e.target.style.display = 'none' }} className="w-10 h-10 object-cover rounded border border-gray-200 shrink-0" />
                       : <div className="w-10 h-10 rounded border border-gray-100 bg-gray-50 shrink-0" />
                     }
                     <div>
@@ -236,7 +236,7 @@ export default function Parts() {
           <button key={part.id} onClick={() => setPanelId(part.id)}
             className="w-full flex items-center gap-3 bg-white rounded-xl border border-gray-200 p-3 active:bg-gray-50 text-left">
             {part.image_url
-              ? <img src={part.image_url} alt="" className="w-14 h-14 object-cover rounded-lg border border-gray-200 shrink-0" />
+              ? <img src={`/api/parts/image/${part.id}`} alt="" className="w-14 h-14 object-cover rounded-lg border border-gray-200 shrink-0" />
               : <div className="w-14 h-14 rounded-lg border border-gray-100 bg-gray-50 shrink-0 flex items-center justify-center text-gray-300 text-xl">⬡</div>
             }
             <div className="flex-1 min-w-0">

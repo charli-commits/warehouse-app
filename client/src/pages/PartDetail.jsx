@@ -231,10 +231,10 @@ export default function PartDetail() {
         <div className="flex items-start gap-4">
           <div className="relative shrink-0 group w-24 h-24 md:w-32 md:h-32">
             {part.image_url
-              ? <img src={part.image_url} alt={part.name}
+              ? <img src={`/api/parts/image/${part.id}${part._imgTs ? `?t=${part._imgTs}` : ''}`} alt={part.name}
                   onError={e => { e.target.src = ''; e.target.style.display = 'none'; e.target.nextElementSibling?.style && (e.target.nextElementSibling.style.display = 'flex') }}
                   className="w-24 h-24 md:w-32 md:h-32 object-cover rounded-lg border border-gray-200 cursor-pointer"
-                  onClick={() => window.open(part.image_url.split('?')[0], '_blank')} />
+                  onClick={() => window.open(`/api/parts/image/${part.id}`, '_blank')} />
               : null}
             <div className={`w-24 h-24 md:w-32 md:h-32 rounded-lg border-2 border-dashed border-gray-200 bg-gray-50 items-center justify-center text-gray-300 text-3xl ${part.image_url ? 'hidden' : 'flex'}`}>📷</div>
             {uploadingImg
