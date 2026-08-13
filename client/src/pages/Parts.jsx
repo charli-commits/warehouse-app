@@ -1,5 +1,5 @@
-import { useEffect, useState, useCallback } from 'react'
-import { useSearchParams, Link } from 'react-router-dom'
+import { useEffect, useState, useCallback, useRef } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { api } from '../lib/api'
 import { useAuth } from '../lib/AuthContext'
 import { getPermissions } from '../lib/permissions'
@@ -8,12 +8,17 @@ import StockBadge from '../components/ui/StockBadge'
 import PartForm from '../components/PartForm'
 import PartPanel from '../components/PartPanel'
 
+const PAGE_SIZE = 100
+
 export default function Parts() {
   const { user } = useAuth()
   const perm = getPermissions(user?.role)
   const [searchParams, setSearchParams] = useSearchParams()
   const [parts, setParts] = useState([])
   const [total, setTotal] = useState(0)
+  const [page, setPage] = useState(1)
+  const [hasMore, setHasMore] = useState(false)
+  const [loadingMore, setLoadingMore] = useState(false)
   const [categories, setCategories] = useState([])
   const [manufacturers, setManufacturers] = useState([])
   const [locations, setLocations] = useState([])
@@ -22,6 +27,7 @@ export default function Parts() {
   const [editing, setEditing] = useState(null)
   const [panelId, setPanelId] = useState(null)
   const [searchInput, setSearchInput] = useState(searchParams.get('search') || '')
+  const sentinelRef = useRef(null)
 
   const search = searchParams.get('search') || ''
   const category = searchParams.get('category') || ''
@@ -29,16 +35,13 @@ export default function Parts() {
   const manufacturer = searchParams.get('manufacturer') || ''
   const location = searchParams.get('location') || ''
   const sort = searchParams.get('sort') || ''
-  const page = Math.max(1, parseInt(searchParams.get('page')) || 1)
-  const pageSize = 250
 
-  // Debounce: replace current URL entry so back button skips intermediate states
+  // Debounce search input
   useEffect(() => {
     const t = setTimeout(() => {
       setSearchParams(p => {
         const n = new URLSearchParams(p)
         searchInput ? n.set('search', searchInput) : n.delete('search')
-        n.delete('page')
         return n
       }, { replace: true })
     }, 400)
@@ -46,29 +49,55 @@ export default function Parts() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchInput])
 
-  const load = useCallback(() => {
+  // Reset and load first page when filters change
+  const filters = [search, category, manufacturer, location, lowStock, sort].join('|')
+  useEffect(() => {
     setLoading(true)
-    const params = { page, page_size: pageSize }
-    if (search) params.search = search
-    if (category) params.category = category
-    if (manufacturer) params.manufacturer = manufacturer
-    if (location) params.location = location
-    if (lowStock) params.low_stock = 'true'
-    if (sort) params.sort = sort
+    setParts([])
+    setPage(1)
+    const params = { page: 1, page_size: PAGE_SIZE, ...(search && { search }), ...(category && { category }), ...(manufacturer && { manufacturer }), ...(location && { location }), ...(lowStock && { low_stock: 'true' }), ...(sort && { sort }) }
     api.getParts(params)
       .then(res => {
-        if (Array.isArray(res)) { setParts(res); setTotal(res.length) }
-        else { setParts(res.data); setTotal(res.total) }
+        const data = Array.isArray(res) ? res : res.data
+        const tot  = Array.isArray(res) ? res.length : res.total
+        setParts(data)
+        setTotal(tot)
+        setHasMore(data.length === PAGE_SIZE && data.length < tot)
       })
       .finally(() => setLoading(false))
-  }, [search, category, manufacturer, location, lowStock, sort, page])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filters])
 
-  useEffect(() => { load() }, [load])
+  // Load next page
+  const loadMore = useCallback(() => {
+    if (loadingMore || !hasMore) return
+    setLoadingMore(true)
+    const nextPage = page + 1
+    const params = { page: nextPage, page_size: PAGE_SIZE, ...(search && { search }), ...(category && { category }), ...(manufacturer && { manufacturer }), ...(location && { location }), ...(lowStock && { low_stock: 'true' }), ...(sort && { sort }) }
+    api.getParts(params)
+      .then(res => {
+        const data = Array.isArray(res) ? res : res.data
+        const tot  = Array.isArray(res) ? res.length : res.total
+        setParts(prev => [...prev, ...data])
+        setPage(nextPage)
+        setHasMore(data.length === PAGE_SIZE && parts.length + data.length < tot)
+      })
+      .finally(() => setLoadingMore(false))
+  }, [loadingMore, hasMore, page, search, category, manufacturer, location, lowStock, sort, parts.length])
+
+  // IntersectionObserver on sentinel div
+  useEffect(() => {
+    const el = sentinelRef.current
+    if (!el) return
+    const obs = new IntersectionObserver(([entry]) => { if (entry.isIntersecting) loadMore() }, { rootMargin: '200px' })
+    obs.observe(el)
+    return () => obs.disconnect()
+  }, [loadMore])
+
   useEffect(() => { api.getPartCategories().then(setCategories).catch(() => {}) }, [])
   useEffect(() => { api.getPartManufacturers().then(setManufacturers).catch(() => {}) }, [])
   useEffect(() => { api.getPartLocations().then(setLocations).catch(() => {}) }, [])
 
-  const totalPages = Math.max(1, Math.ceil(total / pageSize))
   function goToPage(p) {
     setSearchParams(prev => {
       const n = new URLSearchParams(prev)
@@ -185,7 +214,7 @@ export default function Parts() {
                 <td className="px-4 py-3">
                   <div className="flex items-center gap-3">
                     {part.image_url
-                      ? <img src={part.image_url} alt="" onError={e => { e.target.style.display = 'none' }} className="w-10 h-10 object-cover rounded border border-gray-200 shrink-0" />
+                      ? <img src={`/api/parts/${part.id}/image`} alt="" onError={e => { e.target.style.display = 'none' }} className="w-10 h-10 object-cover rounded border border-gray-200 shrink-0" />
                       : <div className="w-10 h-10 rounded border border-gray-100 bg-gray-50 shrink-0" />
                     }
                     <div>
@@ -236,7 +265,7 @@ export default function Parts() {
           <button key={part.id} onClick={() => setPanelId(part.id)}
             className="w-full flex items-center gap-3 bg-white rounded-xl border border-gray-200 p-3 active:bg-gray-50 text-left">
             {part.image_url
-              ? <img src={part.image_url} alt="" className="w-14 h-14 object-cover rounded-lg border border-gray-200 shrink-0" />
+              ? <img src={`/api/parts/${part.id}/image`} alt="" className="w-14 h-14 object-cover rounded-lg border border-gray-200 shrink-0" />
               : <div className="w-14 h-14 rounded-lg border border-gray-100 bg-gray-50 shrink-0 flex items-center justify-center text-gray-300 text-xl">⬡</div>
             }
             <div className="flex-1 min-w-0">
@@ -260,15 +289,12 @@ export default function Parts() {
         ))}
       </div>
 
-      {/* Pagination */}
-      <div className="flex items-center justify-between mt-4 text-sm text-gray-500">
-        <span>{total} pieza{total === 1 ? '' : 's'} · p.{page}/{totalPages}</span>
-        <div className="flex gap-2">
-          <button onClick={() => goToPage(page - 1)} disabled={page <= 1}
-            className="px-3 py-1.5 rounded-md border border-gray-300 disabled:opacity-40 hover:bg-gray-50">←</button>
-          <button onClick={() => goToPage(page + 1)} disabled={page >= totalPages}
-            className="px-3 py-1.5 rounded-md border border-gray-300 disabled:opacity-40 hover:bg-gray-50">→</button>
-        </div>
+      {/* Counter + infinite scroll sentinel */}
+      <div className="mt-4 text-center text-xs text-gray-400">
+        {parts.length} de {total} pieza{total === 1 ? '' : 's'}
+      </div>
+      <div ref={sentinelRef} className="h-10 flex items-center justify-center">
+        {loadingMore && <span className="text-xs text-gray-400">Cargando más…</span>}
       </div>
 
       {showForm && (
