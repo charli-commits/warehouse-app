@@ -3,22 +3,9 @@ const router = express.Router()
 const prisma = require('../lib/prisma')
 const multer = require('multer')
 const path = require('path')
-const { S3Client, PutObjectCommand, GetObjectCommand } = require('@aws-sdk/client-s3')
 
 const SUPABASE_URL = process.env.SUPABASE_URL || 'https://wtpaggzdwhpxxtatcpxo.supabase.co'
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY || ''
-
-// Cloudflare R2 client
-const R2_ACCOUNT_ID = process.env.R2_ACCOUNT_ID
-const R2_BUCKET = process.env.R2_BUCKET || 'warehouse-parts'
-const r2 = R2_ACCOUNT_ID ? new S3Client({
-  region: 'auto',
-  endpoint: `https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com`,
-  credentials: {
-    accessKeyId: process.env.R2_ACCESS_KEY_ID,
-    secretAccessKey: process.env.R2_SECRET_ACCESS_KEY,
-  },
-}) : null
 
 async function supabaseUpload(filename, buffer, mimetype) {
   const res = await fetch(`${SUPABASE_URL}/storage/v1/object/parts/${filename}`, {
@@ -210,57 +197,6 @@ router.get('/locations/all', async (req, res) => {
   res.json(rows.map(r => r.location))
 })
 
-// Photo proxy cache — serves part images through server to avoid Supabase CDN egress
-const photoCache = new Map()
-const PHOTO_CACHE_MAX = 300
-
-router.get('/:id/image', async (req, res) => {
-  const id = Number(req.params.id)
-  if (!id) return res.status(400).end()
-
-  // Serve from cache if available
-  if (photoCache.has(id)) {
-    const { buf, contentType } = photoCache.get(id)
-    res.setHeader('Content-Type', contentType)
-    res.setHeader('Cache-Control', 'public, max-age=86400')
-    return res.send(buf)
-  }
-
-  // Fetch image_url from DB
-  const part = await prisma.part.findUnique({ where: { id }, select: { image_url: true } })
-  if (!part?.image_url) return res.status(404).end()
-
-  let buf, contentType
-  try {
-    if (part.image_url.startsWith('r2://') && r2) {
-      // Serve from Cloudflare R2
-      const key = part.image_url.slice(5) // strip 'r2://'
-      const cmd = new GetObjectCommand({ Bucket: R2_BUCKET, Key: key })
-      const resp = await r2.send(cmd)
-      const chunks = []
-      for await (const chunk of resp.Body) chunks.push(chunk)
-      buf = Buffer.concat(chunks)
-      contentType = resp.ContentType || 'image/jpeg'
-    } else {
-      // Serve from Supabase (legacy)
-      const r = await fetch(part.image_url)
-      if (!r.ok) return res.status(r.status).end()
-      buf = Buffer.from(await r.arrayBuffer())
-      contentType = r.headers.get('content-type') || 'image/jpeg'
-    }
-  } catch (e) {
-    return res.status(502).end()
-  }
-
-  // Store in cache (evict oldest when full)
-  if (photoCache.size >= PHOTO_CACHE_MAX) photoCache.delete(photoCache.keys().next().value)
-  photoCache.set(id, { buf, contentType })
-
-  res.setHeader('Content-Type', contentType)
-  res.setHeader('Cache-Control', 'public, max-age=86400')
-  res.send(buf)
-})
-
 // GET /api/parts/:id/image-sign — returns a signed upload URL for direct client→Supabase upload
 router.get('/:id/image-sign', async (req, res) => {
   const id = Number(req.params.id)
@@ -289,24 +225,7 @@ router.patch('/:id/image', async (req, res) => {
   res.json({ image_url: part.image_url })
 })
 
-// Helper: upload buffer to R2 (preferred) or Supabase (fallback)
-async function uploadPhoto(id, buffer, mimetype) {
-  const ext = mimetype.split('/')[1] || 'jpg'
-  if (r2) {
-    const key = `parts/${id}.${ext}`
-    await r2.send(new PutObjectCommand({ Bucket: R2_BUCKET, Key: key, Body: buffer, ContentType: mimetype }))
-    // Invalidate cache so proxy refetches
-    photoCache.delete(id)
-    return `r2://${key}`
-  } else {
-    // Fallback to Supabase if R2 not configured
-    const filename = `manual/${id}_${Date.now()}.${ext}`
-    await supabaseUpload(filename, buffer, mimetype)
-    return `${SUPABASE_URL}/storage/v1/object/public/parts/${filename}`
-  }
-}
-
-// POST /api/parts/:id/image-upload — receives base64 image from client
+// POST /api/parts/:id/image-upload — receives base64 image from client, uploads to Supabase
 router.post('/:id/image-upload', async (req, res) => {
   const id = Number(req.params.id)
   const { imageBase64 } = req.body
@@ -315,26 +234,30 @@ router.post('/:id/image-upload', async (req, res) => {
   if (!matches) return res.status(400).json({ error: 'Formato de imagen inválido' })
   const mimetype = matches[1]
   const buffer = Buffer.from(matches[2], 'base64')
+  const filename = `manual/${id}_${Date.now()}.jpg`
   try {
-    const imageUrl = await uploadPhoto(id, buffer, mimetype)
-    const part = await prisma.part.update({ where: { id }, data: { image_url: imageUrl } })
-    res.json({ image_url: part.image_url })
+    await supabaseUpload(filename, buffer, mimetype)
   } catch (err) {
     return res.status(500).json({ error: err.message })
   }
+  const publicUrl = `${SUPABASE_URL}/storage/v1/object/public/parts/${filename}`
+  const part = await prisma.part.update({ where: { id }, data: { image_url: publicUrl } })
+  res.json({ image_url: part.image_url })
 })
 
 // POST /api/parts/:id/image — legacy fallback (kept for compatibility)
 router.post('/:id/image', upload.single('image'), async (req, res) => {
   const id = Number(req.params.id)
   if (!req.file) return res.status(400).json({ error: 'No se recibió ninguna imagen' })
+  const filename = `manual/${id}_${Date.now()}.jpg`
   try {
-    const imageUrl = await uploadPhoto(id, req.file.buffer, req.file.mimetype)
-    const part = await prisma.part.update({ where: { id }, data: { image_url: imageUrl } })
-    res.json({ image_url: part.image_url })
+    await supabaseUpload(filename, req.file.buffer, req.file.mimetype)
   } catch (err) {
     return res.status(500).json({ error: err.message })
   }
+  const publicUrl = `${SUPABASE_URL}/storage/v1/object/public/parts/${filename}`
+  const part = await prisma.part.update({ where: { id }, data: { image_url: publicUrl } })
+  res.json({ image_url: part.image_url })
 })
 
 // GET /api/parts/:id

@@ -22,7 +22,7 @@ function PartResultRow({ p, onClick }) {
       <div className="shrink-0 w-8 h-8 rounded border border-gray-200 overflow-hidden bg-gray-100 flex items-center justify-center"
         onClick={e => { e.stopPropagation(); if (p.image_url) setImgOpen(v => !v) }}>
         {p.image_url
-          ? <img src={`/api/parts/${p.id}/image`} alt="" className="w-full h-full object-cover cursor-zoom-in" />
+          ? <img src={p.image_url} alt="" className="w-full h-full object-cover cursor-zoom-in" />
           : <span className="text-gray-300 text-xs">—</span>}
       </div>
 
@@ -31,7 +31,7 @@ function PartResultRow({ p, onClick }) {
         <div ref={imgRef}
           className="absolute left-12 top-0 z-[100] bg-white border border-gray-200 rounded-xl shadow-2xl p-1.5"
           onClick={e => e.stopPropagation()}>
-          <img src={`/api/parts/${p.id}/image`} alt={p.name}
+          <img src={p.image_url} alt={p.name}
             className="max-w-[280px] max-h-[280px] object-contain rounded-lg" />
         </div>
       )}

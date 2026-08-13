@@ -161,8 +161,7 @@ export default function PartDetail() {
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Error subiendo imagen')
-      // Force proxy to refetch by appending cache-bust to the proxy URL (not stored in DB)
-      setPart(p => ({ ...p, image_url: data.image_url, _imgTs: Date.now() }))
+      setPart(p => ({ ...p, image_url: data.image_url + '?t=' + Date.now() }))
     } catch (err) {
       alert(err.message)
     } finally {
@@ -232,10 +231,10 @@ export default function PartDetail() {
         <div className="flex items-start gap-4">
           <div className="relative shrink-0 group w-24 h-24 md:w-32 md:h-32">
             {part.image_url
-              ? <img src={`/api/parts/${part.id}/image${part._imgTs ? `?t=${part._imgTs}` : ''}`} alt={part.name}
+              ? <img src={part.image_url} alt={part.name}
                   onError={e => { e.target.src = ''; e.target.style.display = 'none'; e.target.nextElementSibling?.style && (e.target.nextElementSibling.style.display = 'flex') }}
                   className="w-24 h-24 md:w-32 md:h-32 object-cover rounded-lg border border-gray-200 cursor-pointer"
-                  onClick={() => window.open(`/api/parts/${part.id}/image`, '_blank')} />
+                  onClick={() => window.open(part.image_url.split('?')[0], '_blank')} />
               : null}
             <div className={`w-24 h-24 md:w-32 md:h-32 rounded-lg border-2 border-dashed border-gray-200 bg-gray-50 items-center justify-center text-gray-300 text-3xl ${part.image_url ? 'hidden' : 'flex'}`}>📷</div>
             {uploadingImg

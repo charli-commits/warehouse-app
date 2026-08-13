@@ -54,7 +54,7 @@ export default function PartPanel({ partId, onClose }) {
               {part.image_url ? (
                 <div className="relative">
                   <img
-                    src={`/api/parts/${part.id}/image`}
+                    src={part.image_url}
                     alt={part.name}
                     onClick={() => setImgZoom(true)}
                     className="w-full max-h-64 object-contain rounded-xl border border-gray-100 bg-gray-50 cursor-zoom-in"
@@ -130,7 +130,7 @@ export default function PartPanel({ partId, onClose }) {
       {/* Zoom imagen */}
       {imgZoom && part?.image_url && (
         <div className="fixed inset-0 z-[60] bg-black/80 flex items-center justify-center p-6" onClick={() => setImgZoom(false)}>
-          <img src={`/api/parts/${part.id}/image`} alt={part.name} className="max-w-full max-h-full object-contain rounded-xl" />
+          <img src={part.image_url} alt={part.name} className="max-w-full max-h-full object-contain rounded-xl" />
           <button onClick={() => setImgZoom(false)} className="absolute top-4 right-4 text-white text-3xl leading-none">✕</button>
         </div>
       )}
