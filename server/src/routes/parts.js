@@ -82,7 +82,7 @@ router.post('/migrate-to-r2', async (req, res) => {
 
 // Photo proxy cache
 const photoCache = new Map()
-const PHOTO_CACHE_MAX = 300
+const PHOTO_CACHE_MAX = 50
 
 // GET /api/parts/:id/image — proxy foto (R2 o Supabase)
 router.get('/image/:id', async (req, res) => {
