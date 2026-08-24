@@ -42,6 +42,77 @@ const upload = multer({
   fileFilter: (req, file, cb) => cb(null, /image\//.test(file.mimetype))
 })
 
+// POST /api/parts/cleanup-supabase-parts — borra archivos del bucket 'parts' de Supabase (ya migrados a R2)
+// ?dry=true → solo cuenta, no borra
+router.post('/cleanup-supabase-parts', async (req, res) => {
+  const token = req.headers['x-migrate-token']
+  if (token !== process.env.MIGRATE_TOKEN) return res.status(403).json({ error: 'forbidden' })
+
+  const dry = req.query.dry === 'true'
+
+  res.setHeader('Content-Type', 'text/plain; charset=utf-8')
+  res.setHeader('Transfer-Encoding', 'chunked')
+  res.flushHeaders()
+
+  // 1. Cuántas piezas aún apuntan a Supabase (riesgo si borramos)
+  const supabaseParts = await prisma.part.findMany({
+    where: { image_url: { startsWith: 'http' } },
+    select: { id: true, code: true, image_url: true }
+  })
+  res.write(`Piezas con imagen en Supabase (NO migradas a R2): ${supabaseParts.length}\n`)
+  if (supabaseParts.length > 0) {
+    supabaseParts.slice(0, 20).forEach(p => res.write(`  [${p.id}] ${p.code} → ${p.image_url?.slice(0,80)}\n`))
+    if (supabaseParts.length > 20) res.write(`  ... y ${supabaseParts.length - 20} más\n`)
+  }
+  res.write('\n')
+
+  if (dry) {
+    res.write('--- DRY RUN: no se ha borrado nada ---\n')
+    res.end()
+    return
+  }
+
+  // 2. Listar y borrar archivos del bucket 'parts' en lotes de 100
+  res.write('Borrando archivos del bucket "parts" en Supabase...\n')
+  let totalDeleted = 0
+  let errors = 0
+  let offset = 0
+  const BATCH = 100
+
+  while (true) {
+    const listRes = await fetch(
+      `${SUPABASE_URL}/storage/v1/object/list/parts?limit=${BATCH}&offset=${offset}&sortBy[column]=name&sortBy[order]=asc`,
+      { method: 'POST', headers: { 'Authorization': `Bearer ${SUPABASE_KEY}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ prefix: '', limit: BATCH, offset }) }
+    )
+    if (!listRes.ok) { res.write(`ERROR listando: ${await listRes.text()}\n`); break }
+    const files = await listRes.json()
+    if (!files.length) break
+
+    const names = files.map(f => f.name)
+    const delRes = await fetch(`${SUPABASE_URL}/storage/v1/object/parts`, {
+      method: 'DELETE',
+      headers: { 'Authorization': `Bearer ${SUPABASE_KEY}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ prefixes: names })
+    })
+    if (!delRes.ok) {
+      errors++
+      res.write(`ERROR borrando lote offset=${offset}: ${await delRes.text()}\n`)
+    } else {
+      totalDeleted += names.length
+      res.write(`  Borrados ${totalDeleted} archivos...\n`)
+    }
+
+    if (files.length < BATCH) break
+    offset += BATCH
+  }
+
+  res.write(`\nFIN: ${totalDeleted} archivos borrados, ${errors} errores\n`)
+  if (supabaseParts.length > 0) {
+    res.write(`AVISO: ${supabaseParts.length} piezas tenían imagen en Supabase — esas fotos ya no son accesibles\n`)
+  }
+  res.end()
+})
+
 // POST /api/parts/migrate-to-r2 — internal migration endpoint (protected by token)
 router.post('/migrate-to-r2', async (req, res) => {
   const token = req.headers['x-migrate-token']
@@ -92,7 +163,7 @@ router.get('/image/:id', async (req, res) => {
   if (photoCache.has(id)) {
     const { buf, contentType } = photoCache.get(id)
     res.setHeader('Content-Type', contentType)
-    res.setHeader('Cache-Control', 'public, max-age=86400')
+    res.setHeader('Cache-Control', 'public, max-age=3600')
     return res.send(buf)
   }
 
@@ -121,7 +192,7 @@ router.get('/image/:id', async (req, res) => {
   if (photoCache.size >= PHOTO_CACHE_MAX) photoCache.delete(photoCache.keys().next().value)
   photoCache.set(id, { buf, contentType })
   res.setHeader('Content-Type', contentType)
-  res.setHeader('Cache-Control', 'public, max-age=86400')
+  res.setHeader('Cache-Control', 'public, max-age=3600')
   res.send(buf)
 })
 
@@ -345,15 +416,32 @@ router.post('/:id/image-upload', async (req, res) => {
 router.post('/:id/image', upload.single('image'), async (req, res) => {
   const id = Number(req.params.id)
   if (!req.file) return res.status(400).json({ error: 'No se recibió ninguna imagen' })
-  const filename = `manual/${id}_${Date.now()}.jpg`
   try {
-    await supabaseUpload(filename, req.file.buffer, req.file.mimetype)
+    let image_url
+    if (r2) {
+      // Subir a R2
+      const ext = req.file.mimetype.split('/')[1]?.replace('jpeg', 'jpg') || 'jpg'
+      const key = `parts/${id}.${ext}`
+      await r2.send(new PutObjectCommand({
+        Bucket: R2_BUCKET,
+        Key: key,
+        Body: req.file.buffer,
+        ContentType: req.file.mimetype,
+      }))
+      image_url = `r2://${key}`
+    } else {
+      // Fallback Supabase
+      const filename = `manual/${id}_${Date.now()}.jpg`
+      await supabaseUpload(filename, req.file.buffer, req.file.mimetype)
+      image_url = `${SUPABASE_URL}/storage/v1/object/public/parts/${filename}`
+    }
+    await prisma.part.update({ where: { id }, data: { image_url } })
+    // Invalidar caché en memoria para que la próxima petición descargue la nueva
+    photoCache.delete(id)
+    res.json({ image_url })
   } catch (err) {
     return res.status(500).json({ error: err.message })
   }
-  const publicUrl = `${SUPABASE_URL}/storage/v1/object/public/parts/${filename}`
-  const part = await prisma.part.update({ where: { id }, data: { image_url: publicUrl } })
-  res.json({ image_url: part.image_url })
 })
 
 // GET /api/parts/:id
@@ -652,11 +740,18 @@ router.post('/:id/transfer', async (req, res) => {
         throw new Error(`Stock insuficiente en "${from_location}": disponible ${src?.stock ?? 0}`)
       }
 
-      // Mover PartLocation
-      await tx.partLocation.update({
-        where: { part_id_location: { part_id, location: from_location } },
-        data: { stock: { decrement: qty } }
-      })
+      // Mover PartLocation — eliminar fila si queda a 0
+      const newSrcStock = src.stock - qty
+      if (newSrcStock === 0) {
+        await tx.partLocation.delete({
+          where: { part_id_location: { part_id, location: from_location } }
+        })
+      } else {
+        await tx.partLocation.update({
+          where: { part_id_location: { part_id, location: from_location } },
+          data: { stock: newSrcStock }
+        })
+      }
       await tx.partLocation.upsert({
         where: { part_id_location: { part_id, location: to_location } },
         update: { stock: { increment: qty } },
@@ -673,10 +768,15 @@ router.post('/:id/transfer', async (req, res) => {
       for (const ll of lotLocs) {
         if (remaining <= 0) break
         const move = Math.min(ll.stock, remaining)
-        await tx.lotLocation.update({
-          where: { id: ll.id },
-          data: { stock: { decrement: move } }
-        })
+        const newLotStock = ll.stock - move
+        if (newLotStock === 0) {
+          await tx.lotLocation.delete({ where: { id: ll.id } })
+        } else {
+          await tx.lotLocation.update({
+            where: { id: ll.id },
+            data: { stock: newLotStock }
+          })
+        }
         await tx.lotLocation.upsert({
           where: { lot_id_location: { lot_id: ll.lot_id, location: to_location } },
           update: { stock: { increment: move } },

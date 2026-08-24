@@ -57,6 +57,7 @@ app.use('/api', (req, res, next) => {
   if (req.path.startsWith('/auth/')) return next()
   if (/\/label$/.test(req.path)) return next()
   if (/\/migrate-to-r2$/.test(req.path)) return next()
+  if (/\/cleanup-supabase-parts$/.test(req.path)) return next()
   if (/\/image\/\d+/.test(req.path)) return next()
   const cronSecret = process.env.CRON_SECRET
   if (cronSecret && req.headers['x-cron-secret'] === cronSecret) return next()
