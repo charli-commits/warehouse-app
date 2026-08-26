@@ -149,19 +149,17 @@ export default function PartDetail() {
     setUploadingImg(true)
     try {
       const compressed = await compressImage(file)
-      const base64 = await toBase64(compressed)
       const token = JSON.parse(localStorage.getItem('wh_user') || '{}')?.token
-      const res = await fetch(`/api/parts/${id}/image-upload`, {
+      const form = new FormData()
+      form.append('image', compressed, 'photo.jpg')
+      const res = await fetch(`/api/parts/${id}/image`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-        body: JSON.stringify({ imageBase64: base64 }),
+        headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+        body: form,
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Error subiendo imagen')
-      setPart(p => ({ ...p, image_url: data.image_url + '?t=' + Date.now() }))
+      setPart(p => ({ ...p, image_url: data.image_url, _imgTs: Date.now() }))
     } catch (err) {
       alert(err.message)
     } finally {
