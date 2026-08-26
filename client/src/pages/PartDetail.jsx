@@ -18,6 +18,7 @@ export default function PartDetail() {
   const [adjusting, setAdjusting] = useState(false)
 
   const [uploadingImg, setUploadingImg] = useState(false)
+  const [uploadError, setUploadError] = useState(null)
   const fileInputRef = useRef(null)
 
   // Locations
@@ -147,6 +148,7 @@ export default function PartDetail() {
     const file = e.target.files?.[0]
     if (!file) return
     setUploadingImg(true)
+    setUploadError(null)
     try {
       const compressed = await compressImage(file)
       const token = JSON.parse(localStorage.getItem('wh_user') || '{}')?.token
@@ -158,10 +160,10 @@ export default function PartDetail() {
         body: form,
       })
       const data = await res.json()
-      if (!res.ok) throw new Error(data.error || 'Error subiendo imagen')
+      if (!res.ok) throw new Error(data.error || `Error ${res.status}`)
       setPart(p => ({ ...p, image_url: data.image_url, _imgTs: Date.now() }))
     } catch (err) {
-      alert(err.message)
+      setUploadError(err.message)
     } finally {
       setUploadingImg(false)
       e.target.value = ''
@@ -246,6 +248,11 @@ export default function PartDetail() {
             }
             <input ref={fileInputRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={handleImageUpload} disabled={uploadingImg} />
           </div>
+          {uploadError && (
+            <div className="mt-2 text-xs text-red-600 bg-red-50 rounded px-2 py-1 break-all">
+              ❌ {uploadError}
+            </div>
+          )}
           <div className="flex-1 min-w-0">
             <div className="flex items-start justify-between gap-2">
               <div>
