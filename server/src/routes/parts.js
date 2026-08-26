@@ -392,7 +392,7 @@ router.patch('/:id/image', async (req, res) => {
   res.json({ image_url: part.image_url })
 })
 
-// POST /api/parts/:id/image-upload — receives base64 image from client, uploads to Supabase
+// POST /api/parts/:id/image-upload — receives base64 image from client, uploads to R2
 router.post('/:id/image-upload', async (req, res) => {
   const id = Number(req.params.id)
   const { imageBase64 } = req.body
@@ -401,15 +401,24 @@ router.post('/:id/image-upload', async (req, res) => {
   if (!matches) return res.status(400).json({ error: 'Formato de imagen inválido' })
   const mimetype = matches[1]
   const buffer = Buffer.from(matches[2], 'base64')
-  const filename = `manual/${id}_${Date.now()}.jpg`
   try {
-    await supabaseUpload(filename, buffer, mimetype)
+    let image_url
+    if (r2) {
+      const ext = mimetype.split('/')[1]?.replace('jpeg', 'jpg') || 'jpg'
+      const key = `parts/${id}.${ext}`
+      await r2.send(new PutObjectCommand({ Bucket: R2_BUCKET, Key: key, Body: buffer, ContentType: mimetype }))
+      image_url = `r2://${key}`
+    } else {
+      const filename = `manual/${id}_${Date.now()}.jpg`
+      await supabaseUpload(filename, buffer, mimetype)
+      image_url = `${SUPABASE_URL}/storage/v1/object/public/parts/${filename}`
+    }
+    await prisma.part.update({ where: { id }, data: { image_url } })
+    photoCache.delete(id)
+    res.json({ image_url })
   } catch (err) {
     return res.status(500).json({ error: err.message })
   }
-  const publicUrl = `${SUPABASE_URL}/storage/v1/object/public/parts/${filename}`
-  const part = await prisma.part.update({ where: { id }, data: { image_url: publicUrl } })
-  res.json({ image_url: part.image_url })
 })
 
 // POST /api/parts/:id/image — legacy fallback (kept for compatibility)
