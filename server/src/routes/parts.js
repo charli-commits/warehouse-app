@@ -163,7 +163,7 @@ router.get('/image/:id', async (req, res) => {
   if (photoCache.has(id)) {
     const { buf, contentType } = photoCache.get(id)
     res.setHeader('Content-Type', contentType)
-    res.setHeader('Cache-Control', 'public, max-age=3600')
+    res.setHeader('Cache-Control', 'no-cache')
     return res.send(buf)
   }
 
@@ -192,7 +192,7 @@ router.get('/image/:id', async (req, res) => {
   if (photoCache.size >= PHOTO_CACHE_MAX) photoCache.delete(photoCache.keys().next().value)
   photoCache.set(id, { buf, contentType })
   res.setHeader('Content-Type', contentType)
-  res.setHeader('Cache-Control', 'public, max-age=3600')
+  res.setHeader('Cache-Control', 'no-cache')
   res.send(buf)
 })
 
