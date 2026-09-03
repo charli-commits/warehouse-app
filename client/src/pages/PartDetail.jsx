@@ -162,7 +162,7 @@ export default function PartDetail() {
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || `Error ${res.status}`)
-      setPart(p => ({ ...p, image_url: data.image_url, _imgTs: Date.now() }))
+      setPart(p => ({ ...p, image_url: data.image_url, updated_at: new Date().toISOString(), _imgTs: Date.now() }))
     } catch (err) {
       setUploadError(err.message)
     } finally {
