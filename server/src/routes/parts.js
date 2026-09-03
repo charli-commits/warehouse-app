@@ -72,39 +72,57 @@ router.post('/cleanup-supabase-parts', async (req, res) => {
     return
   }
 
-  // 2. Listar y borrar archivos del bucket 'parts' en lotes de 100
-  res.write('Borrando archivos del bucket "parts" en Supabase...\n')
+  // 2. Listar y borrar archivos recursivamente (Supabase no es recursivo, hay que iterar prefijos)
+  res.write('Borrando archivos del bucket "parts" en Supabase (recursivo)...\n')
   let totalDeleted = 0
   let errors = 0
-  let offset = 0
   const BATCH = 100
 
-  while (true) {
-    const listRes = await fetch(
-      `${SUPABASE_URL}/storage/v1/object/list/parts?limit=${BATCH}&offset=${offset}&sortBy[column]=name&sortBy[order]=asc`,
-      { method: 'POST', headers: { 'Authorization': `Bearer ${SUPABASE_KEY}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ prefix: '', limit: BATCH, offset }) }
-    )
-    if (!listRes.ok) { res.write(`ERROR listando: ${await listRes.text()}\n`); break }
-    const files = await listRes.json()
-    if (!files.length) break
+  async function deletePrefix(prefix) {
+    let offset = 0
+    while (true) {
+      const listRes = await fetch(`${SUPABASE_URL}/storage/v1/object/list/parts`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${SUPABASE_KEY}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prefix, limit: BATCH, offset, sortBy: { column: 'name', order: 'asc' } })
+      })
+      if (!listRes.ok) { res.write(`ERROR listando prefix="${prefix}": ${await listRes.text()}\n`); break }
+      const items = await listRes.json()
+      if (!items.length) break
 
-    const names = files.map(f => f.name)
-    const delRes = await fetch(`${SUPABASE_URL}/storage/v1/object/parts`, {
-      method: 'DELETE',
-      headers: { 'Authorization': `Bearer ${SUPABASE_KEY}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ prefixes: names })
-    })
-    if (!delRes.ok) {
-      errors++
-      res.write(`ERROR borrando lote offset=${offset}: ${await delRes.text()}\n`)
-    } else {
-      totalDeleted += names.length
-      res.write(`  Borrados ${totalDeleted} archivos...\n`)
+      // Separar carpetas (id===null) de archivos
+      const folders = items.filter(f => f.id === null)
+      const files = items.filter(f => f.id !== null)
+
+      // Borrar archivos del lote actual
+      if (files.length) {
+        const prefixes = files.map(f => prefix ? `${prefix}/${f.name}` : f.name)
+        const delRes = await fetch(`${SUPABASE_URL}/storage/v1/object/parts`, {
+          method: 'DELETE',
+          headers: { 'Authorization': `Bearer ${SUPABASE_KEY}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ prefixes })
+        })
+        if (!delRes.ok) {
+          errors++
+          res.write(`ERROR borrando en "${prefix}": ${await delRes.text()}\n`)
+        } else {
+          totalDeleted += files.length
+          res.write(`  Borrados ${totalDeleted} archivos...\n`)
+        }
+      }
+
+      // Recursivo en subcarpetas
+      for (const folder of folders) {
+        const subPrefix = prefix ? `${prefix}/${folder.name}` : folder.name
+        await deletePrefix(subPrefix)
+      }
+
+      if (items.length < BATCH) break
+      offset += BATCH
     }
-
-    if (files.length < BATCH) break
-    offset += BATCH
   }
+
+  await deletePrefix('')
 
   res.write(`\nFIN: ${totalDeleted} archivos borrados, ${errors} errores\n`)
   if (supabaseParts.length > 0) {
