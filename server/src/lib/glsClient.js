@@ -132,7 +132,6 @@ function buildShipmentXml({ recipient, ref, fecha, parcels = 1, retorno = 0, ser
     <Importes>
       <Reembolso></Reembolso>
     </Importes>
-    ${isInternational && incoterm ? `<Incoterm>${esc(incoterm)}</Incoterm>` : ''}
   </Envio>
 </Servicios>`
 }
