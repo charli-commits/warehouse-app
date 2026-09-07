@@ -13,7 +13,7 @@ app.use(helmet({
   contentSecurityPolicy: {
     directives: {
       ...helmet.contentSecurityPolicy.getDefaultDirectives(),
-      'img-src': ["'self'", 'data:', 'https://wtpaggzdwhpxxtatcpxo.supabase.co'],
+      'img-src': ["'self'", 'data:', 'https://wtpaggzdwhpxxtatcpxo.supabase.co', 'https://pub-e5c6eedc35e84d119e316774c64d5c65.r2.dev'],
       'frame-src': ["'self'", 'https://wtpaggzdwhpxxtatcpxo.supabase.co'],
     },
   },
