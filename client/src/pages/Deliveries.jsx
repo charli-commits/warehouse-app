@@ -109,6 +109,7 @@ function DeliveryForm({ initial, onSave, onCancel }) {
     notes: initial?.notes ?? '',
     gls_retorno: initial?.gls_retorno ?? false,
     gls_horario: initial?.gls_horario ?? 0,
+    gls_incoterm: initial?.gls_incoterm ?? 'DAP',
     lines: initial?.lines?.map(l => ({
       part_id: l.part_id,
       part_code: l.part?.code ?? '',
@@ -170,6 +171,7 @@ function DeliveryForm({ initial, onSave, onCancel }) {
         notes: form.notes || null,
         gls_retorno: form.gls_retorno,
         gls_horario: Number(form.gls_horario),
+        gls_incoterm: form.gls_incoterm || 'DAP',
         lines: form.lines.map(l => ({ part_id: Number(l.part_id), quantity: Number(l.quantity) }))
       })
     } catch (err) { setError(err.message) }
@@ -339,6 +341,18 @@ function DeliveryForm({ initial, onSave, onCancel }) {
           <option value={4}>Express 10:30</option>
         </select>
       </div>
+      {addr && addr.country && !['España', 'Spain', 'ES'].includes(addr.country) && (
+        <div>
+          <label className="block text-xs font-medium text-gray-600 mb-1">
+            Incoterm <span className="text-gray-400 font-normal">(condiciones de entrega en aduana)</span>
+          </label>
+          <select value={form.gls_incoterm ?? 'DAP'} onChange={e => setForm(f => ({ ...f, gls_incoterm: e.target.value }))}
+            className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+            <option value="DAP">DAP — Gastos de aduana a cargo del destinatario</option>
+            <option value="DDP">DDP — Gastos de aduana a cargo del remitente (nosotros)</option>
+          </select>
+        </div>
+      )}
       <label className="flex items-center gap-2 cursor-pointer">
         <input type="checkbox" checked={form.gls_retorno} onChange={e => setForm(f => ({ ...f, gls_retorno: e.target.checked }))} className="rounded" />
         <span className="text-sm text-gray-700">Con retorno GLS <span className="text-gray-400 text-xs">(recogida del paquete devuelto)</span></span>
@@ -934,6 +948,7 @@ export default function Deliveries() {
                     {n.carrier
                       ? <div className="text-sm font-medium text-gray-700">🚚 {n.carrier}</div>
                       : <p className="text-sm text-gray-400">Sin transportista asignado</p>}
+                    {n.gls_incoterm && <div className="text-xs text-gray-500">Incoterm: <span className={`font-semibold ${n.gls_incoterm === 'DDP' ? 'text-orange-600' : 'text-gray-700'}`}>{n.gls_incoterm}</span></div>}
                     {n.gls_tracking && <span className="inline-flex items-center gap-1"><span className="font-mono text-sm text-blue-600 select-all cursor-text">{n.gls_tracking}</span><a href="https://gls-group.eu/ES/es/home/" target="_blank" rel="noreferrer" title="Abrir seguimiento GLS" className="text-blue-400 hover:text-blue-600">🔗</a></span>}
                     {n.gls_label_url && (
                       <a href={`/api/deliveries/${n.id}/label`} target="_blank" rel="noreferrer"

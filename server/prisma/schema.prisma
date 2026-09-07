@@ -142,6 +142,7 @@ model DeliveryNote {
   gls_label_url     String?
   gls_retorno       Boolean  @default(false)
   gls_horario       Int?
+  gls_incoterm      String?  // DAP (default) o DDP
   shipped_at        DateTime?
   created_by_id     Int?
   created_at        DateTime @default(now())

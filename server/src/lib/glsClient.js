@@ -80,7 +80,7 @@ const GLS_SERVICE_MAP = {
   '1_0':   { servicio: 1,  horario: 0  },
 }
 
-function buildShipmentXml({ recipient, ref, fecha, parcels = 1, retorno = 0, serviceKey }) {
+function buildShipmentXml({ recipient, ref, fecha, parcels = 1, retorno = 0, serviceKey, incoterm }) {
   const dateStr = fecha || new Date().toLocaleDateString('es-ES', { day:'2-digit', month:'2-digit', year:'numeric' })
   const isInternational = recipient.country && recipient.country.toUpperCase() !== 'ES'
   let servicio, horario
@@ -132,6 +132,7 @@ function buildShipmentXml({ recipient, ref, fecha, parcels = 1, retorno = 0, ser
     <Importes>
       <Reembolso></Reembolso>
     </Importes>
+    ${isInternational && incoterm ? `<Incoterm>${esc(incoterm)}</Incoterm>` : ''}
   </Envio>
 </Servicios>`
 }
@@ -177,8 +178,8 @@ function postSoap(xmlBody, soapAction) {
 const GLS_HORARIO_TO_KEY = { 0: '96_18', 1: '37_18', 2: '1_3', 3: '1_2', 4: '1_0' }
 function glsServiceKey(glsHorario) { return GLS_HORARIO_TO_KEY[glsHorario] || '96_18' }
 
-async function grabaServicios(recipient, ref, parcels = 1, retorno = 0, serviceKey) {
-  const innerXml = buildShipmentXml({ recipient, ref, parcels, retorno, serviceKey })
+async function grabaServicios(recipient, ref, parcels = 1, retorno = 0, serviceKey, incoterm) {
+  const innerXml = buildShipmentXml({ recipient, ref, parcels, retorno, serviceKey, incoterm })
   const envelope = soapEnvelope('GrabaServicios', innerXml)
   const raw = await postSoap(envelope, `${GLS_NS}GrabaServicios`)
 
@@ -230,7 +231,7 @@ async function etiquetaEnvio(codbarras) {
 
 // Public — creates shipment + fetches label PDFs, merges into one buffer
 // Returns { tracking: string (comma-separated), labelPdfBuffer: Buffer }
-async function createShipment({ recipient, ref, parcels = 1, retorno = 0, glsHorario }) {
+async function createShipment({ recipient, ref, parcels = 1, retorno = 0, glsHorario, incoterm }) {
   if (!isConfigured()) throw new Error('GLS_UID no configurado en .env')
   if (!recipient.zip || recipient.zip.length < 4)
     throw new Error('Falta el código postal del destinatario. Edita la dirección del albarán antes de generar la etiqueta GLS.')
@@ -239,7 +240,7 @@ async function createShipment({ recipient, ref, parcels = 1, retorno = 0, glsHor
   if (!recipient.address)
     throw new Error('Falta la dirección del destinatario.')
 
-  const envios = await grabaServicios(recipient, ref, parcels, retorno, glsServiceKey(glsHorario))
+  const envios = await grabaServicios(recipient, ref, parcels, retorno, glsServiceKey(glsHorario), incoterm)
   const labelBuffers = []
   for (const { codbarras } of envios) {
     try {

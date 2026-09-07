@@ -30,6 +30,10 @@ const MIGRATIONS = [
     name: '0007_add_gls_horario',
     sql: `ALTER TABLE "DeliveryNote" ADD COLUMN IF NOT EXISTS "gls_horario" INTEGER;`,
   },
+  {
+    name: '0008_add_gls_incoterm',
+    sql: `ALTER TABLE "DeliveryNote" ADD COLUMN IF NOT EXISTS "gls_incoterm" TEXT;`,
+  },
 ]
 
 async function runMigrations() {

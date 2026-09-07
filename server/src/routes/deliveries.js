@@ -319,7 +319,7 @@ router.get('/:id', async (req, res) => {
 // POST /api/deliveries
 router.post('/', async (req, res) => {
   try {
-    const { odoo_partner_id, odoo_partner_name, shipping_address, notes, client_ref, lines = [], created_by_id, gls_retorno, gls_horario } = req.body
+    const { odoo_partner_id, odoo_partner_name, shipping_address, notes, client_ref, lines = [], created_by_id, gls_retorno, gls_horario, gls_incoterm } = req.body
     const note = await prisma.deliveryNote.create({
       data: {
         odoo_partner_id: odoo_partner_id ? Number(odoo_partner_id) : null,
@@ -329,6 +329,7 @@ router.post('/', async (req, res) => {
         client_ref: client_ref || null,
         gls_retorno: gls_retorno === true,
         gls_horario: gls_horario != null ? Number(gls_horario) : null,
+        gls_incoterm: gls_incoterm || null,
         created_by_id: created_by_id ? Number(created_by_id) : null,
         lines: {
           create: lines.map(l => ({
@@ -352,7 +353,7 @@ router.post('/', async (req, res) => {
 router.put('/:id', async (req, res) => {
   const id = Number(req.params.id)
   try {
-    const { odoo_partner_id, odoo_partner_name, shipping_address, notes, client_ref, parcels, lines, gls_retorno, gls_horario } = req.body
+    const { odoo_partner_id, odoo_partner_name, shipping_address, notes, client_ref, parcels, lines, gls_retorno, gls_horario, gls_incoterm } = req.body
     const updateData = {
       ...(odoo_partner_id !== undefined && { odoo_partner_id: odoo_partner_id ? Number(odoo_partner_id) : null }),
       ...(odoo_partner_name !== undefined && { odoo_partner_name }),
@@ -362,6 +363,7 @@ router.put('/:id', async (req, res) => {
       ...(parcels !== undefined && { parcels: Math.max(1, Number(parcels)) }),
       ...(gls_retorno !== undefined && { gls_retorno: gls_retorno === true }),
       ...(gls_horario !== undefined && { gls_horario: gls_horario != null ? Number(gls_horario) : null }),
+      ...(gls_incoterm !== undefined && { gls_incoterm: gls_incoterm || null }),
     }
 
     if (lines) {
@@ -590,6 +592,7 @@ router.post('/:id/ship', async (req, res) => {
         parcels: note.parcels || 1,
         retorno: note.gls_retorno ? 1 : 0,
         glsHorario: note.gls_horario,
+        incoterm: note.gls_incoterm || null,
         recipient: {
           name: note.odoo_partner_name || 'Cliente',
           address: addr.street || '',
