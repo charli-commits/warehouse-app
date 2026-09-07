@@ -186,7 +186,7 @@ function buildShipmentXml({ recipient, ref, fecha, parcels = 1, retorno = 0, ser
     <Importes>
       <Reembolso></Reembolso>
     </Importes>
-    ${isInternational && incoterm ? `<Aduanas><Incoterm>${esc(incoterm)}</Incoterm></Aduanas>` : ''}
+    ${isInternational && incoterm ? `<Aduanas><Incoterm>${incoterm === 'DDP' ? 10 : 20}</Incoterm></Aduanas>` : ''}
   </Envio>
 </Servicios>`
 }
