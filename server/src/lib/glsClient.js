@@ -62,8 +62,62 @@ const GLS_COUNTRY_CODES = {
   CY:301, MT:443, GI:441,
 }
 
-function glsCountryCode(iso) {
-  return GLS_COUNTRY_CODES[(iso || 'ES').toUpperCase()] ?? 34
+// Nombres de país en español/inglés → código ISO
+const COUNTRY_NAME_TO_ISO = {
+  'ESPAÑA': 'ES', 'SPAIN': 'ES',
+  'PORTUGAL': 'PT',
+  'REINO UNIDO': 'GB', 'UNITED KINGDOM': 'GB', 'UK': 'GB', 'ENGLAND': 'GB',
+  'ALEMANIA': 'DE', 'GERMANY': 'DE',
+  'FRANCIA': 'FR', 'FRANCE': 'FR',
+  'ITALIA': 'IT', 'ITALY': 'IT',
+  'PAÍSES BAJOS': 'NL', 'PAISES BAJOS': 'NL', 'NETHERLANDS': 'NL', 'HOLANDA': 'NL',
+  'BÉLGICA': 'BE', 'BELGICA': 'BE', 'BELGIUM': 'BE',
+  'SUIZA': 'CH', 'SWITZERLAND': 'CH',
+  'AUSTRIA': 'AT',
+  'SUECIA': 'SE', 'SWEDEN': 'SE',
+  'NORUEGA': 'NO', 'NORWAY': 'NO',
+  'DINAMARCA': 'DK', 'DENMARK': 'DK',
+  'FINLANDIA': 'FI', 'FINLAND': 'FI',
+  'IRLANDA': 'IE', 'IRELAND': 'IE',
+  'GRECIA': 'GR', 'GREECE': 'GR',
+  'POLONIA': 'PL', 'POLAND': 'PL',
+  'REPÚBLICA CHECA': 'CZ', 'REPUBLICA CHECA': 'CZ', 'CZECH REPUBLIC': 'CZ',
+  'HUNGRÍA': 'HU', 'HUNGRIA': 'HU', 'HUNGARY': 'HU',
+  'RUMANÍA': 'RO', 'RUMANIA': 'RO', 'ROMANIA': 'RO',
+  'BULGARIA': 'BG',
+  'CROACIA': 'HR', 'CROATIA': 'HR',
+  'ESLOVENIA': 'SI', 'SLOVENIA': 'SI',
+  'ESLOVAQUIA': 'SK', 'SLOVAKIA': 'SK',
+  'LUXEMBURGO': 'LU', 'LUXEMBOURG': 'LU',
+  'ESTONIA': 'EE',
+  'LETONIA': 'LV', 'LATVIA': 'LV',
+  'LITUANIA': 'LT', 'LITHUANIA': 'LT',
+  'TURQUÍA': 'TR', 'TURQUIA': 'TR', 'TURKEY': 'TR',
+  'MARRUECOS': 'MA', 'MOROCCO': 'MA',
+  'ESTADOS UNIDOS': 'US', 'UNITED STATES': 'US', 'USA': 'US',
+  'CANADÁ': 'CA', 'CANADA': 'CA',
+  'BRASIL': 'BR', 'BRAZIL': 'BR',
+  'ARGENTINA': 'AR',
+  'MÉXICO': 'MX', 'MEXICO': 'MX',
+  'CHINA': 'CN',
+  'JAPÓN': 'JP', 'JAPON': 'JP', 'JAPAN': 'JP',
+  'AUSTRALIA': 'AU',
+  'INDIA': 'IN',
+  'UCRANIA': 'UA', 'UKRAINE': 'UA',
+}
+
+function resolveCountryIso(country) {
+  if (!country) return 'ES'
+  const upper = country.toUpperCase().trim()
+  // Si ya es un código ISO de 2 letras, devolverlo directamente
+  if (/^[A-Z]{2}$/.test(upper)) return upper
+  // Buscar por nombre
+  return COUNTRY_NAME_TO_ISO[upper] || upper
+}
+
+function glsCountryCode(country) {
+  const iso = resolveCountryIso(country)
+  return GLS_COUNTRY_CODES[iso] ?? 34
 }
 
 // Valid nacional combos (from ES-GLS-Maestros_V2.xlsx "Servicios&Horarios"):
@@ -82,7 +136,7 @@ const GLS_SERVICE_MAP = {
 
 function buildShipmentXml({ recipient, ref, fecha, parcels = 1, retorno = 0, serviceKey, incoterm }) {
   const dateStr = fecha || new Date().toLocaleDateString('es-ES', { day:'2-digit', month:'2-digit', year:'numeric' })
-  const isInternational = recipient.country && recipient.country.toUpperCase() !== 'ES'
+  const isInternational = recipient.country && resolveCountryIso(recipient.country) !== 'ES'
   let servicio, horario
   if (isInternational) {
     servicio = 74; horario = 3
