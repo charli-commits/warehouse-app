@@ -79,12 +79,13 @@ router.post('/cleanup-supabase-parts', async (req, res) => {
   const BATCH = 100
 
   async function deletePrefix(prefix) {
-    let offset = 0
+    // Siempre listamos desde offset=0 — al borrar, la lista se desplaza,
+    // así que no incrementamos offset para no saltarnos archivos
     while (true) {
       const listRes = await fetch(`${SUPABASE_URL}/storage/v1/object/list/parts`, {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${SUPABASE_KEY}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prefix, limit: BATCH, offset, sortBy: { column: 'name', order: 'asc' } })
+        body: JSON.stringify({ prefix, limit: BATCH, offset: 0, sortBy: { column: 'name', order: 'asc' } })
       })
       if (!listRes.ok) { res.write(`ERROR listando prefix="${prefix}": ${await listRes.text()}\n`); break }
       const items = await listRes.json()
@@ -111,14 +112,14 @@ router.post('/cleanup-supabase-parts', async (req, res) => {
         }
       }
 
-      // Recursivo en subcarpetas
+      // Recursivo en subcarpetas (solo en la primera pasada de cada prefix)
       for (const folder of folders) {
         const subPrefix = prefix ? `${prefix}/${folder.name}` : folder.name
         await deletePrefix(subPrefix)
       }
 
-      if (items.length < BATCH) break
-      offset += BATCH
+      // Si solo había carpetas (sin archivos), salir para no quedar en bucle infinito
+      if (files.length === 0) break
     }
   }
 
