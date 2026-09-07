@@ -139,7 +139,13 @@ function buildShipmentXml({ recipient, ref, fecha, parcels = 1, retorno = 0, ser
   const isInternational = recipient.country && resolveCountryIso(recipient.country) !== 'ES'
   let servicio, horario
   if (isInternational) {
-    servicio = 74; horario = 3
+    const iso = resolveCountryIso(recipient.country)
+    // UK (post-Brexit) usa servicio 99 TRACKED24, no EuroBusinessParcel (74)
+    if (iso === 'GB') {
+      servicio = 99; horario = 3
+    } else {
+      servicio = 74; horario = 3
+    }
   } else {
     const combo = GLS_SERVICE_MAP[serviceKey] || GLS_SERVICE_MAP['96_18']
     servicio = combo.servicio; horario = combo.horario
