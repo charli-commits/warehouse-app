@@ -109,7 +109,7 @@ function DeliveryForm({ initial, onSave, onCancel }) {
     notes: initial?.notes ?? '',
     gls_retorno: initial?.gls_retorno ?? false,
     gls_horario: initial?.gls_horario ?? 0,
-    gls_incoterm: initial?.gls_incoterm ?? 'DAP',
+    gls_incoterm: initial?.gls_incoterm ?? 'DDP',
     lines: initial?.lines?.map(l => ({
       part_id: l.part_id,
       part_code: l.part?.code ?? '',
@@ -171,7 +171,7 @@ function DeliveryForm({ initial, onSave, onCancel }) {
         notes: form.notes || null,
         gls_retorno: form.gls_retorno,
         gls_horario: Number(form.gls_horario),
-        gls_incoterm: form.gls_incoterm || 'DAP',
+        gls_incoterm: form.gls_incoterm || 'DDP',
         lines: form.lines.map(l => ({ part_id: Number(l.part_id), quantity: Number(l.quantity) }))
       })
     } catch (err) { setError(err.message) }
@@ -346,7 +346,7 @@ function DeliveryForm({ initial, onSave, onCancel }) {
           <label className="block text-xs font-medium text-gray-600 mb-1">
             Incoterm <span className="text-gray-400 font-normal">(condiciones de entrega en aduana)</span>
           </label>
-          <select value={form.gls_incoterm ?? 'DAP'} onChange={e => setForm(f => ({ ...f, gls_incoterm: e.target.value }))}
+          <select value={form.gls_incoterm ?? 'DDP'} onChange={e => setForm(f => ({ ...f, gls_incoterm: e.target.value }))}
             className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
             <option value="DAP">DAP — Gastos de aduana a cargo del destinatario</option>
             <option value="DDP">DDP — Gastos de aduana a cargo del remitente (nosotros)</option>
