@@ -781,6 +781,9 @@ function buildPackingListPDF(note, fifoLocs) {
     const M = 50
     const PW = 595.28 - M * 2
     const doc = new PDFKit({ margin: M, size: 'A4' })
+    const FONT_DIR = path.join(__dirname, '../assets')
+    doc.registerFont('Sans', path.join(FONT_DIR, 'DejaVuSans.ttf'))
+    doc.registerFont('Sans-Bold', path.join(FONT_DIR, 'DejaVuSans-Bold.ttf'))
     const chunks = []
     doc.on('data', c => chunks.push(c))
     doc.on('end', () => resolve(Buffer.concat(chunks)))
@@ -792,17 +795,17 @@ function buildPackingListPDF(note, fifoLocs) {
     if (fs.existsSync(logoPath)) {
       doc.image(logoPath, M + PW - LOGO_W, M, { width: LOGO_W, height: LOGO_H })
     }
-    doc.fontSize(20).font('Helvetica-Bold').fillColor('#000').text('ALBARÁN DE SALIDA', M, M, { width: PW - LOGO_W - 10 })
-    doc.fontSize(10).font('Helvetica').fillColor('#666').text(`${ref}  ·  ${dateStr}`, M, M + 28)
+    doc.fontSize(20).font('Sans-Bold').fillColor('#000').text('ALBARÁN DE SALIDA', M, M, { width: PW - LOGO_W - 10 })
+    doc.fontSize(10).font('Sans').fillColor('#666').text(`${ref}  ·  ${dateStr}`, M, M + 28)
     if (note.client_ref) doc.text(`Ref. pedido: ${note.client_ref}`, M, M + 42)
     if (note.carrier) doc.text(`Transportista: ${note.carrier}${note.gls_tracking ? `  ·  ${note.gls_tracking}` : ''}`, M, M + (note.client_ref ? 56 : 42))
 
     // Sender box (left)
     const boxY = M + 80
     doc.rect(M, boxY, PW / 2 - 6, 90).fill('#f3f4f6')
-    doc.fontSize(7).font('Helvetica-Bold').fillColor('#888').text('REMITENTE', M + 10, boxY + 8)
-    doc.fontSize(10).font('Helvetica-Bold').fillColor('#111').text('GYM COMPANY RETAIL SL', M + 10, boxY + 20)
-    doc.fontSize(8).font('Helvetica').fillColor('#444')
+    doc.fontSize(7).font('Sans-Bold').fillColor('#888').text('REMITENTE', M + 10, boxY + 8)
+    doc.fontSize(10).font('Sans-Bold').fillColor('#111').text('GYM COMPANY RETAIL SL', M + 10, boxY + 20)
+    doc.fontSize(8).font('Sans').fillColor('#444')
       .text('AVDA CORTS CATALANES 8 NAVE 6', M + 10, boxY + 34)
       .text('08173 SANT CUGAT DEL VALLÈS', M + 10, boxY + 46)
 
@@ -810,9 +813,9 @@ function buildPackingListPDF(note, fifoLocs) {
     const rx = M + PW / 2 + 6
     const rw = PW / 2 - 6
     doc.rect(rx, boxY, rw, 90).fill('#f3f4f6')
-    doc.fontSize(7).font('Helvetica-Bold').fillColor('#888').text('DESTINATARIO', rx + 10, boxY + 8)
-    doc.fontSize(10).font('Helvetica-Bold').fillColor('#111').text(note.odoo_partner_name || '—', rx + 10, boxY + 20, { width: rw - 20 })
-    doc.fontSize(8).font('Helvetica').fillColor('#444')
+    doc.fontSize(7).font('Sans-Bold').fillColor('#888').text('DESTINATARIO', rx + 10, boxY + 8)
+    doc.fontSize(10).font('Sans-Bold').fillColor('#111').text(note.odoo_partner_name || '—', rx + 10, boxY + 20, { width: rw - 20 })
+    doc.fontSize(8).font('Sans').fillColor('#444')
     let ay = boxY + 34
     if (addr.street) { doc.text(addr.street, rx + 10, ay, { width: rw - 20 }); ay += 12 }
     if (addr.zip || addr.city) { doc.text(`${addr.zip || ''} ${addr.city || ''}`.trim(), rx + 10, ay, { width: rw - 20 }); ay += 12 }
@@ -822,7 +825,7 @@ function buildPackingListPDF(note, fifoLocs) {
     doc.y = boxY + 106
 
     if (note.notes) {
-      doc.fontSize(8).font('Helvetica').fillColor('#555').text(`Notas: ${note.notes}`, M, doc.y, { width: PW })
+      doc.fontSize(8).font('Sans').fillColor('#555').text(`Notas: ${note.notes}`, M, doc.y, { width: PW })
       doc.y += 16
     }
 
@@ -837,7 +840,7 @@ function buildPackingListPDF(note, fifoLocs) {
 
     doc.rect(M, doc.y, PW, 20).fill('#1e3a5f')
     const th = doc.y + 5
-    doc.fontSize(9).font('Helvetica-Bold').fillColor('#fff')
+    doc.fontSize(9).font('Sans-Bold').fillColor('#fff')
       .text('Código',      COL_CODE, th, { width: 100,    lineBreak: false })
       .text('Descripción', COL_DESC, th, { width: DESC_W, lineBreak: false })
       .text('Ubicación',   LOC_X,    th, { width: LOC_W,  lineBreak: false })
@@ -851,13 +854,13 @@ function buildPackingListPDF(note, fifoLocs) {
       rowBg = !rowBg
       const ry = doc.y + 4
       const locs = fifoLocs[line.part_id] || '—'
-      doc.fontSize(8).font('Helvetica-Bold').fillColor('#333')
+      doc.fontSize(8).font('Sans-Bold').fillColor('#333')
         .text(line.part?.code || '—', COL_CODE, ry, { width: 100, lineBreak: false })
-      doc.font('Helvetica').fillColor('#222')
+      doc.font('Sans').fillColor('#222')
         .text(line.part?.name || '—', COL_DESC, ry, { width: DESC_W, lineBreak: false })
-      doc.fillColor('#1e3a5f').font('Helvetica-Bold')
+      doc.fillColor('#1e3a5f').font('Sans-Bold')
         .text(locs, LOC_X, ry, { width: LOC_W, lineBreak: false })
-      doc.font('Helvetica').fillColor('#222')
+      doc.font('Sans').fillColor('#222')
         .text(`${line.quantity} ${line.part?.unit || ''}`, QTY_X, ry, { width: QTY_W, align: 'right', lineBreak: false })
       doc.y = ry + 18
     }
@@ -865,14 +868,14 @@ function buildPackingListPDF(note, fifoLocs) {
     // Footer
     doc.moveTo(M, doc.y + 6).lineTo(M + PW, doc.y + 6).lineWidth(0.5).stroke('#ccc')
     doc.y += 16
-    doc.fontSize(8).font('Helvetica').fillColor('#888')
+    doc.fontSize(8).font('Sans').fillColor('#888')
       .text(`Total bultos: ${note.parcels || 1}  ·  ${note.lines.length} línea(s)  ·  Generado ${new Date().toLocaleDateString('es-ES')}`, M, doc.y, { align: 'center', width: PW })
 
     // Signature boxes
     doc.y += 30
     doc.rect(M, doc.y, PW / 2 - 10, 50).stroke('#ccc')
     doc.rect(M + PW / 2 + 10, doc.y, PW / 2 - 10, 50).stroke('#ccc')
-    doc.fontSize(7).font('Helvetica').fillColor('#aaa')
+    doc.fontSize(7).font('Sans').fillColor('#aaa')
       .text('Firma remitente', M + 5, doc.y + 3)
       .text('Firma destinatario', M + PW / 2 + 15, doc.y + 3)
 
@@ -924,6 +927,9 @@ function buildResumenPDF(notes) {
     const PW = 595.28 - M * 2  // usable width (A4)
     const PH = 841.89
     const doc = new PDFKit({ margin: M, size: 'A4', autoFirstPage: true })
+    const FONT_DIR = path.join(__dirname, '../assets')
+    doc.registerFont('Sans', path.join(FONT_DIR, 'DejaVuSans.ttf'))
+    doc.registerFont('Sans-Bold', path.join(FONT_DIR, 'DejaVuSans-Bold.ttf'))
     const chunks = []
     doc.on('data', c => chunks.push(c))
     doc.on('end', () => resolve(Buffer.concat(chunks)))
@@ -946,9 +952,9 @@ function buildResumenPDF(notes) {
       checkPage(16)
       const y = doc.y
       if (isHeader) {
-        doc.font('Helvetica-Bold').fontSize(8).fillColor('#555')
+        doc.font('Sans-Bold').fontSize(8).fillColor('#555')
       } else {
-        doc.font('Helvetica').fontSize(8).fillColor('#222')
+        doc.font('Sans').fontSize(8).fillColor('#222')
       }
       doc.text(code, C0, y, { width: 95, lineBreak: false })
       doc.text(name, C1, y, { width: NAME_W, lineBreak: false })
@@ -960,8 +966,8 @@ function buildResumenPDF(notes) {
     const totalLines = notes.reduce((s, n) => s + n.lines.length, 0)
 
     // Page header
-    doc.font('Helvetica-Bold').fontSize(18).fillColor('#000').text('Resumen de envíos', M, M)
-    doc.font('Helvetica').fontSize(10).fillColor('#666')
+    doc.font('Sans-Bold').fontSize(18).fillColor('#000').text('Resumen de envíos', M, M)
+    doc.font('Sans').fontSize(10).fillColor('#666')
       .text(`Fecha: ${dateStr}   ·   Total albaranes: ${notes.length}   ·   Total líneas: ${totalLines}`, M, M + 24)
     doc.y = M + 52
     doc.moveTo(M, doc.y).lineTo(M + PW, doc.y).lineWidth(1).stroke('#ccc')
@@ -979,13 +985,13 @@ function buildResumenPDF(notes) {
       // Header bar
       const barY = doc.y
       doc.rect(M, barY, PW, 20).fill('#1e3a5f')
-      doc.font('Helvetica-Bold').fontSize(10).fillColor('#fff')
+      doc.font('Sans-Bold').fontSize(10).fillColor('#fff')
         .text(ref, M + 6, barY + 5, { width: 120, lineBreak: false })
       doc.text(clientName, M + 130, barY + 5, { width: PW - 140, lineBreak: false })
       doc.y = barY + 26
 
       // Metadata
-      doc.font('Helvetica').fontSize(8.5).fillColor('#444')
+      doc.font('Sans').fontSize(8.5).fillColor('#444')
       if (tracking !== '—') {
         doc.text(`Tracking GLS: ${tracking}`, M, doc.y, { lineBreak: false })
         doc.y += 13
