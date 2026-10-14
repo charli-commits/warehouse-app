@@ -150,7 +150,7 @@ router.get('/monthly-deliveries', async (req, res) => {
   since.setHours(0, 0, 0, 0)
 
   const notes = await prisma.deliveryNote.findMany({
-    where: { status: 'SHIPPED', shipped_at: { gte: since } },
+    where: { status: { in: ['SHIPPED', 'DELIVERED'] }, shipped_at: { gte: since } },
     select: { shipped_at: true }
   })
 
