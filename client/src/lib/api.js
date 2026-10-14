@@ -135,6 +135,7 @@ export const api = {
   getOdooStatus: () => request('/odoo/status'),
   getDashboard: () => request('/dashboard'),
   getEfficiency: (days = 30) => request(`/dashboard/efficiency?days=${days}`),
+  getMonthlyDeliveries: (months = 12) => request(`/dashboard/monthly-deliveries?months=${months}`),
   syncOdoo: () => request('/odoo/sync', { method: 'POST' }),
   getOdooProducts: () => request('/odoo/products'),
   getOdooPartners: () => request('/odoo/partners'),

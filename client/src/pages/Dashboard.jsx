@@ -37,12 +37,14 @@ export default function Dashboard() {
   const [supplierCount, setSupplierCount] = useState(null)
   const [efficiency, setEfficiency] = useState(null)
   const [effDays, setEffDays] = useState(30)
+  const [monthly, setMonthly] = useState(null)
   const navigate = useNavigate()
 
   useEffect(() => {
     api.getDashboard().then(setDash).catch(() => {})
     api.getPartStats().then(setStats).catch(() => {})
     api.getSuppliers().then(s => setSupplierCount(s.length)).catch(() => {})
+    api.getMonthlyDeliveries(12).then(setMonthly).catch(() => {})
   }, [])
 
   useEffect(() => {
@@ -134,6 +136,48 @@ export default function Dashboard() {
       {dash && dash.pending_orders?.length === 0 && dash.active_deliveries?.length === 0 && dash.low_stock?.length === 0 && (
         <div className="text-center py-12 text-gray-400 text-sm">Todo en orden</div>
       )}
+
+      {/* Monthly deliveries chart */}
+      <section>
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">Albaranes enviados por mes</h2>
+          {monthly && (
+            <span className="text-xs text-gray-400">
+              Total 12m: {monthly.reduce((s, m) => s + m.count, 0)}
+            </span>
+          )}
+        </div>
+        {!monthly ? (
+          <div className="text-center py-6 text-gray-400 text-sm">Cargando...</div>
+        ) : (
+          <div className="bg-white rounded-xl border border-gray-200 p-4">
+            {(() => {
+              const max = Math.max(...monthly.map(m => m.count), 1)
+              const currentMonth = new Date().toLocaleDateString('es-ES', { month: 'short', year: '2-digit' })
+              return (
+                <div className="flex items-end gap-1.5 h-32">
+                  {monthly.map(m => {
+                    const pct = (m.count / max) * 100
+                    const isCurrent = m.label === currentMonth
+                    return (
+                      <div key={m.key} className="flex-1 flex flex-col items-center gap-1 h-full justify-end group relative">
+                        <div className="absolute bottom-6 left-1/2 -translate-x-1/2 bg-gray-800 text-white text-xs rounded px-1.5 py-0.5 opacity-0 group-hover:opacity-100 whitespace-nowrap z-10 pointer-events-none">
+                          {m.count} albarán{m.count !== 1 ? 'es' : ''}
+                        </div>
+                        <div
+                          className={`w-full rounded-t transition-all ${isCurrent ? 'bg-blue-500' : 'bg-blue-200'}`}
+                          style={{ height: `${Math.max(pct, m.count > 0 ? 4 : 1)}%` }}
+                        />
+                        <span className="text-[10px] text-gray-400 truncate w-full text-center">{m.label}</span>
+                      </div>
+                    )
+                  })}
+                </div>
+              )
+            })()}
+          </div>
+        )}
+      </section>
 
       {/* Efficiency */}
       <section>

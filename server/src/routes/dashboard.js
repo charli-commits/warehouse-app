@@ -141,4 +141,38 @@ router.get('/efficiency', async (req, res) => {
   res.json({ stats, total_notes: allNotes.length, days: Number(days) })
 })
 
+// GET /api/dashboard/monthly-deliveries — albaranes enviados por mes (últimos 12 meses)
+router.get('/monthly-deliveries', async (req, res) => {
+  const months = Number(req.query.months) || 12
+  const since = new Date()
+  since.setMonth(since.getMonth() - months + 1)
+  since.setDate(1)
+  since.setHours(0, 0, 0, 0)
+
+  const notes = await prisma.deliveryNote.findMany({
+    where: { status: 'SHIPPED', shipped_at: { gte: since } },
+    select: { shipped_at: true }
+  })
+
+  // Group by YYYY-MM
+  const map = {}
+  for (const n of notes) {
+    const d = new Date(n.shipped_at)
+    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+    map[key] = (map[key] || 0) + 1
+  }
+
+  // Fill all months in range (even 0s)
+  const result = []
+  for (let i = 0; i < months; i++) {
+    const d = new Date(since)
+    d.setMonth(since.getMonth() + i)
+    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+    const label = d.toLocaleDateString('es-ES', { month: 'short', year: '2-digit' })
+    result.push({ key, label, count: map[key] || 0 })
+  }
+
+  res.json(result)
+})
+
 module.exports = router
