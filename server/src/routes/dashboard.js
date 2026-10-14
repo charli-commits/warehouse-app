@@ -71,34 +71,30 @@ router.get('/reposicion', async (req, res) => {
   }
 })
 
-// Calcula minutos laborables entre dos fechas (excluye sábados y domingos)
+// Calcula minutos laborables entre dos fechas (excluye sábados y domingos completos)
 function workingMinutes(from, to) {
   const start = new Date(from)
   const end = new Date(to)
   if (end <= start) return 0
 
-  // Cuenta días completos laborables entre las dos fechas
-  const totalMs = end - start
-  const totalMins = totalMs / 60000
+  const totalMins = (end - start) / 60000
 
-  // Semanas completas (lun-vie = 5 días, sab-dom = 2)
-  const totalDays = Math.floor(totalMs / 86400000)
-  const fullWeeks = Math.floor(totalDays / 7)
-  let workDays = fullWeeks * 5
+  // Conta cuántos minutos caen en sábado o domingo
+  // Solo vale la pena para duraciones > 1 día; para duraciones cortas devolvemos directo
+  if (totalMins < 1440) return Math.round(totalMins) // menos de 1 día: no descontamos
 
-  // Días restantes
-  let cur = new Date(start)
-  cur.setDate(cur.getDate() + fullWeeks * 7)
+  // Contar días completos de fin de semana en el rango
+  let weekendMins = 0
+  const cur = new Date(start)
+  cur.setHours(0, 0, 0, 0)
+  cur.setDate(cur.getDate() + 1) // empezar desde el día siguiente al inicio
   while (cur < end) {
     const day = cur.getDay()
-    if (day !== 0 && day !== 6) workDays++
+    if (day === 0 || day === 6) weekendMins += 1440 // día completo
     cur.setDate(cur.getDate() + 1)
   }
 
-  // Fracción del día inicial y final (solo si son laborables)
-  // Aproximación: ratio de días laborables sobre días totales
-  const ratio = totalDays > 0 ? workDays / totalDays : (start.getDay() !== 0 && start.getDay() !== 6 ? 1 : 0)
-  return Math.round(totalMins * ratio)
+  return Math.max(0, Math.round(totalMins - weekendMins))
 }
 
 // GET /api/dashboard/efficiency — tiempos medios entre estados
