@@ -114,6 +114,7 @@ router.get('/efficiency', async (req, res) => {
     { key: 'picking_to_ready', from: 'PICKING', to: 'READY', label: 'Picking' },
     { key: 'ready_to_shipped', from: 'READY', to: 'SHIPPED', label: 'Listo → Enviado' },
     { key: 'shipped_to_delivered', from: 'SHIPPED', to: 'DELIVERED', label: 'Enviado → Entregado' },
+    { key: 'draft_to_shipped', from: 'DRAFT', to: 'SHIPPED', label: 'Creación → Enviado' },
     { key: 'total', from: 'DRAFT', to: 'DELIVERED', label: 'Total (creación → entrega)' },
   ]
 

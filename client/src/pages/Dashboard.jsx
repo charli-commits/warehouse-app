@@ -217,19 +217,36 @@ export default function Dashboard() {
                         highlight={p.avg_minutes !== null && p.avg_minutes === maxAvg && p.avg_minutes > 60} />
                     })}
                   </div>
-                  {efficiency.stats.total && (
-                    <div className="bg-white rounded-xl border border-gray-200 p-4 flex items-center justify-between">
-                      <div>
-                        <div className="text-xs text-gray-500">Tiempo total medio (creación → entrega)</div>
-                        <div className="text-2xl font-bold text-gray-900 mt-0.5">{fmtDuration(efficiency.stats.total.avg_minutes)}</div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    {efficiency.stats.draft_to_shipped && (
+                      <div className="bg-white rounded-xl border border-blue-200 p-4 flex items-center justify-between">
+                        <div>
+                          <div className="text-xs text-gray-500">Creación → Enviado</div>
+                          <div className="text-2xl font-bold text-blue-700 mt-0.5">{fmtDuration(efficiency.stats.draft_to_shipped.avg_minutes)}</div>
+                          <div className="text-xs text-gray-400 mt-0.5">tiempo medio de gestión interna</div>
+                        </div>
+                        <div className="text-right text-xs text-gray-400">
+                          <div>Mín: {fmtDuration(efficiency.stats.draft_to_shipped.min_minutes)}</div>
+                          <div>Máx: {fmtDuration(efficiency.stats.draft_to_shipped.max_minutes)}</div>
+                          <div className="mt-1">{efficiency.stats.draft_to_shipped.count} albaranes</div>
+                        </div>
                       </div>
-                      <div className="text-right text-xs text-gray-400">
-                        <div>Mín: {fmtDuration(efficiency.stats.total.min_minutes)}</div>
-                        <div>Máx: {fmtDuration(efficiency.stats.total.max_minutes)}</div>
-                        <div className="mt-1">{efficiency.stats.total.count} completados</div>
+                    )}
+                    {efficiency.stats.shipped_to_delivered && (
+                      <div className="bg-white rounded-xl border border-green-200 p-4 flex items-center justify-between">
+                        <div>
+                          <div className="text-xs text-gray-500">Enviado → Entregado</div>
+                          <div className="text-2xl font-bold text-green-700 mt-0.5">{fmtDuration(efficiency.stats.shipped_to_delivered.avg_minutes)}</div>
+                          <div className="text-xs text-gray-400 mt-0.5">tiempo medio de tránsito GLS</div>
+                        </div>
+                        <div className="text-right text-xs text-gray-400">
+                          <div>Mín: {fmtDuration(efficiency.stats.shipped_to_delivered.min_minutes)}</div>
+                          <div>Máx: {fmtDuration(efficiency.stats.shipped_to_delivered.max_minutes)}</div>
+                          <div className="mt-1">{efficiency.stats.shipped_to_delivered.count} albaranes</div>
+                        </div>
                       </div>
-                    </div>
-                  )}
+                    )}
+                  </div>
                 </div>
               )
             })()}
