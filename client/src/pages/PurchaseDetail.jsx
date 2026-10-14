@@ -13,6 +13,7 @@ export default function PurchaseDetail() {
   const [order, setOrder] = useState(null)
   const [loading, setLoading] = useState(true)
   const [locations, setLocations] = useState([])
+  const [locationStatuses, setLocationStatuses] = useState({}) // { locationName: status }
 
   // Receiving state: { [lineId]: { qty: '', location: '', saving: false, open: false } }
   const [receiving, setReceiving] = useState({})
@@ -20,6 +21,11 @@ export default function PurchaseDetail() {
   useEffect(() => {
     load()
     api.getPartLocations().then(setLocations).catch(() => {})
+    api.getLocations().then(locs => {
+      const map = {}
+      locs.forEach(l => { if (l.status) map[l.location] = l.status })
+      setLocationStatuses(map)
+    }).catch(() => {})
   }, [id])
 
   function load() {
@@ -169,6 +175,17 @@ export default function PurchaseDetail() {
                         <datalist id="locations-receive-list">
                           {locations.map(loc => <option key={loc} value={loc} />)}
                         </datalist>
+                        {r.location && locationStatuses[r.location.trim()] && (
+                          <div className={`mt-1 text-xs font-medium px-2 py-1 rounded flex items-center gap-1 ${
+                            locationStatuses[r.location.trim()] === 'Llena' ? 'bg-red-100 text-red-700' :
+                            locationStatuses[r.location.trim()] === 'Medio Llena' ? 'bg-yellow-100 text-yellow-700' :
+                            'bg-green-100 text-green-700'
+                          }`}>
+                            {locationStatuses[r.location.trim()] === 'Llena' ? '⚠️' :
+                             locationStatuses[r.location.trim()] === 'Medio Llena' ? '🟡' : '🟢'}
+                            {' '}Ubicación marcada como <strong className="ml-1">{locationStatuses[r.location.trim()]}</strong>
+                          </div>
+                        )}
                       </div>
                     </div>
                     <div className="flex gap-2">
