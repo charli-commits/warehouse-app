@@ -71,6 +71,36 @@ router.get('/reposicion', async (req, res) => {
   }
 })
 
+// Calcula minutos laborables entre dos fechas (excluye sábados y domingos)
+function workingMinutes(from, to) {
+  const start = new Date(from)
+  const end = new Date(to)
+  if (end <= start) return 0
+
+  // Cuenta días completos laborables entre las dos fechas
+  const totalMs = end - start
+  const totalMins = totalMs / 60000
+
+  // Semanas completas (lun-vie = 5 días, sab-dom = 2)
+  const totalDays = Math.floor(totalMs / 86400000)
+  const fullWeeks = Math.floor(totalDays / 7)
+  let workDays = fullWeeks * 5
+
+  // Días restantes
+  let cur = new Date(start)
+  cur.setDate(cur.getDate() + fullWeeks * 7)
+  while (cur < end) {
+    const day = cur.getDay()
+    if (day !== 0 && day !== 6) workDays++
+    cur.setDate(cur.getDate() + 1)
+  }
+
+  // Fracción del día inicial y final (solo si son laborables)
+  // Aproximación: ratio de días laborables sobre días totales
+  const ratio = totalDays > 0 ? workDays / totalDays : (start.getDay() !== 0 && start.getDay() !== 6 ? 1 : 0)
+  return Math.round(totalMins * ratio)
+}
+
 // GET /api/dashboard/efficiency — tiempos medios entre estados
 router.get('/efficiency', async (req, res) => {
   const { days = 30 } = req.query
@@ -125,7 +155,7 @@ router.get('/efficiency', async (req, res) => {
       const fromEv = note.events.find(e => e.status === phase.from)
       const toEv = note.events.find(e => e.status === phase.to)
       if (fromEv && toEv) {
-        const mins = (new Date(toEv.created_at) - new Date(fromEv.created_at)) / 60000
+        const mins = workingMinutes(fromEv.created_at, toEv.created_at)
         if (mins >= 0) durations.push(mins)
       }
     }
