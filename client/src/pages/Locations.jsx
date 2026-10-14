@@ -38,6 +38,11 @@ export default function Locations() {
 
   const anyExpanded = filtered.some(l => expanded[l.location])
 
+  async function setLocationStatus(location, status) {
+    setLocations(prev => prev.map(l => l.location === location ? { ...l, status } : l))
+    await api.setLocationStatus(location, status)
+  }
+
   return (
     <div className="p-4 md:p-8">
       <div className="flex items-center justify-between mb-4 md:mb-6">
@@ -92,6 +97,22 @@ export default function Locations() {
                   </div>
                   <div className="flex items-center gap-3">
                     <span className="text-sm font-medium text-gray-700">{loc.total_stock.toLocaleString('es-ES', { maximumFractionDigits: 2 })} uds</span>
+                    <select
+                      value={loc.status || ''}
+                      onClick={e => e.stopPropagation()}
+                      onChange={e => setLocationStatus(loc.location, e.target.value || null)}
+                      className={`text-xs font-medium rounded-md px-2 py-1 border focus:outline-none focus:ring-2 focus:ring-blue-400 ${
+                        loc.status === 'Llena' ? 'bg-red-100 text-red-700 border-red-200' :
+                        loc.status === 'Medio Llena' ? 'bg-yellow-100 text-yellow-700 border-yellow-200' :
+                        loc.status === 'Vacía' ? 'bg-green-100 text-green-700 border-green-200' :
+                        'bg-gray-100 text-gray-400 border-gray-200'
+                      }`}
+                    >
+                      <option value="">— estado —</option>
+                      <option value="Llena">Llena</option>
+                      <option value="Medio Llena">Medio Llena</option>
+                      <option value="Vacía">Vacía</option>
+                    </select>
                     <span className={`text-gray-400 transition-transform ${isOpen ? 'rotate-180' : ''}`}>▾</span>
                   </div>
                 </button>

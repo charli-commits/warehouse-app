@@ -103,6 +103,7 @@ export const api = {
   renameLocation: (from, to) => request('/locations/rename', { method: 'PUT', body: { from, to } }),
   deleteLocation: (name) => request(`/locations/${encodeURIComponent(name)}`, { method: 'DELETE' }),
   createLocation: (name) => request('/locations/predefined', { method: 'POST', body: { name } }),
+  setLocationStatus: (location, status) => request('/locations/status', { method: 'PUT', body: { location, status } }),
 
   // Categories
   getCategories: () => request('/parts/categories'),

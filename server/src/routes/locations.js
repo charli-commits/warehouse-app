@@ -28,17 +28,22 @@ router.post('/predefined', async (req, res) => {
 
 // GET /api/locations — all locations with parts and totals
 router.get('/', async (req, res) => {
-  const rows = await prisma.partLocation.findMany({
-    include: {
-      part: { select: { id: true, code: true, name: true, unit: true, stock_min: true } }
-    },
-    orderBy: { location: 'asc' }
-  })
+  const [rows, statusSetting] = await Promise.all([
+    prisma.partLocation.findMany({
+      include: {
+        part: { select: { id: true, code: true, name: true, unit: true, stock_min: true } }
+      },
+      orderBy: { location: 'asc' }
+    }),
+    prisma.setting.findUnique({ where: { key: 'location_statuses' } })
+  ])
+
+  const statuses = statusSetting ? JSON.parse(statusSetting.value) : {}
 
   // Group by location
   const map = {}
   for (const row of rows) {
-    if (!map[row.location]) map[row.location] = { location: row.location, total_stock: 0, parts: [] }
+    if (!map[row.location]) map[row.location] = { location: row.location, total_stock: 0, parts: [], status: statuses[row.location] || null }
     map[row.location].total_stock += row.stock
     map[row.location].parts.push({
       id: row.part.id,
@@ -51,6 +56,25 @@ router.get('/', async (req, res) => {
   }
 
   res.json(Object.values(map))
+})
+
+// PUT /api/locations/status — { location, status }
+router.put('/status', async (req, res) => {
+  const { location, status } = req.body
+  if (!location) return res.status(400).json({ error: 'location requerido' })
+  const setting = await prisma.setting.findUnique({ where: { key: 'location_statuses' } })
+  const statuses = setting ? JSON.parse(setting.value) : {}
+  if (status) {
+    statuses[location] = status
+  } else {
+    delete statuses[location]
+  }
+  await prisma.setting.upsert({
+    where: { key: 'location_statuses' },
+    update: { value: JSON.stringify(statuses) },
+    create: { key: 'location_statuses', value: JSON.stringify(statuses) }
+  })
+  res.json({ ok: true })
 })
 
 async function getPredefined() {
