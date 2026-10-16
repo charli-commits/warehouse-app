@@ -1081,4 +1081,183 @@ router.post('/sync-gls-status', async (req, res) => {
   res.json({ ok: true, ...results })
 })
 
+// GET /api/deliveries/:id/proforma-pdf
+router.get('/:id/proforma-pdf', async (req, res) => {
+  const note = await prisma.deliveryNote.findUnique({
+    where: { id: Number(req.params.id) },
+    include: { lines: { include: { part: { select: { id: true, code: true, name: true, unit: true, weight_kg: true, cost_price: true } } } } }
+  })
+  if (!note) return res.status(404).json({ error: 'Albarán no encontrado' })
+  if (!note.gls_incoterm) return res.status(400).json({ error: 'Este albarán no tiene incoterm — no requiere factura proforma' })
+
+  // Generate sequential proforma number per client_ref
+  const refKey = `proforma_seq_${note.client_ref || note.id}`
+  const seqSetting = await prisma.setting.findUnique({ where: { key: refKey } })
+  const seq = (seqSetting ? Number(seqSetting.value) : 0) + 1
+  await prisma.setting.upsert({
+    where: { key: refKey },
+    update: { value: String(seq) },
+    create: { key: refKey, value: String(seq) }
+  })
+  const proformaNum = `P-${note.client_ref || `ALB${note.id}`}-${seq}`
+
+  try {
+    const pdfBuf = await buildProformaPDF(note, proformaNum)
+    res.setHeader('Content-Type', 'application/pdf')
+    res.setHeader('Content-Disposition', `attachment; filename="proforma-${proformaNum}.pdf"`)
+    res.send(pdfBuf)
+  } catch (err) {
+    console.error('[proforma-pdf]', err)
+    res.status(500).json({ error: err.message })
+  }
+})
+
+function buildProformaPDF(note, proformaNum) {
+  const addr = note.shipping_address ? JSON.parse(note.shipping_address) : {}
+  const dateStr = new Date(note.created_at).toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' })
+  const isUK = (addr.country || '').toUpperCase().replace(/\s/g, '').includes('REINOUNIDO') ||
+               (addr.country || '').toUpperCase().includes('UK') ||
+               (addr.country || '').toUpperCase().includes('ENGLAND') ||
+               (addr.country || '').toUpperCase() === 'GB'
+
+  return new Promise((resolve, reject) => {
+    const M = 45
+    const PW = 595.28 - M * 2
+    const doc = new PDFKit({ margin: M, size: 'A4' })
+    const FONT_DIR = path.join(__dirname, '../assets')
+    doc.registerFont('Sans', path.join(FONT_DIR, 'DejaVuSans.ttf'))
+    doc.registerFont('Sans-Bold', path.join(FONT_DIR, 'DejaVuSans-Bold.ttf'))
+    const chunks = []
+    doc.on('data', c => chunks.push(c))
+    doc.on('end', () => resolve(Buffer.concat(chunks)))
+    doc.on('error', reject)
+
+    // ── HEADER: remitente (derecha) + destinatario (izquierda) ──
+    const colW = PW / 2 - 10
+    const rx = M + colW + 20
+
+    // Remitente (derecha)
+    doc.fontSize(10).font('Sans-Bold').fillColor('#000').text('GymCompany Retail SL', rx, M, { width: colW })
+    doc.fontSize(8.5).font('Sans').fillColor('#333')
+      .text('Avenida Corts Catalanes 9-11', rx, doc.y, { width: colW })
+      .text('08173 Sant Cugat del Vallès - España', rx, doc.y, { width: colW })
+      .text(isUK ? 'UST.ID. B65103012' : 'CIF: B65103012', rx, doc.y, { width: colW })
+      .text('info@gymcompany.es', rx, doc.y, { width: colW })
+    if (isUK) {
+      doc.fontSize(7.5).fillColor('#555')
+        .text('VAT Registration Number GB488809229', rx, doc.y, { width: colW })
+        .text('EORI number GB488809229000', rx, doc.y, { width: colW })
+    }
+
+    // Destinatario (izquierda)
+    const destY = M
+    doc.fontSize(9).font('Sans-Bold').fillColor('#000').text(note.odoo_partner_name || '—', M, destY, { width: colW })
+    doc.fontSize(8.5).font('Sans').fillColor('#333')
+    const addrLines = [addr.street, addr.street2, [addr.zip, addr.city].filter(Boolean).join(' '), addr.state, addr.country, addr.phone].filter(Boolean)
+    addrLines.forEach(line => doc.text(line, M, doc.y, { width: colW }))
+
+    const afterHeader = doc.y + 16
+
+    // ── "Esta es su factura" ──
+    doc.fontSize(11).font('Sans-Bold').fillColor('#000').text('Esta es su factura', M, afterHeader, { width: PW, align: 'center' })
+
+    // ── Orden / Factura / Fecha ──
+    const infoY = doc.y + 10
+    doc.fontSize(8).font('Sans-Bold').fillColor('#555')
+    doc.text('Orden Nº', M, infoY)
+    doc.text('Factura Nº', M + PW * 0.33, infoY)
+    doc.text('Fecha de Factura', M + PW * 0.66, infoY)
+    doc.fontSize(9).font('Sans-Bold').fillColor('#000')
+    doc.text(note.client_ref || `ALB-${note.id}`, M, doc.y)
+    doc.text(proformaNum, M + PW * 0.33, infoY + 12)
+    doc.text(dateStr, M + PW * 0.66, infoY + 12)
+
+    // ── Nota garantía ──
+    const noteY = doc.y + 14
+    doc.fontSize(7.5).font('Sans').fillColor('#444')
+      .text('Nota: FACTURA POR ENVIO DE PIEZAS EN GARANTIA, NO TIENE VALOR COMERCIAL PARA LA EMPRESA O EL CLIENTE.', M, noteY, { width: PW })
+    doc.fontSize(7.5).font('Sans').fillColor('#666')
+      .text('"Warranty replacement part supplied free of charge. No commercial transaction. Value declared for customs purposes only."', M, doc.y + 2, { width: PW })
+
+    // ── Términos de entrega ──
+    doc.fontSize(8.5).font('Sans-Bold').fillColor('#000')
+      .text(`Términos de entrega: ${note.gls_incoterm} inc. IVA`, M, doc.y + 8)
+
+    // ── Tabla de líneas ──
+    const tableY = doc.y + 12
+    const cols = { no: 0, uds: 28, sku: 68, desc: 150, precio: PW - 100, total: PW - 40 }
+
+    // Cabecera tabla
+    doc.rect(M, tableY, PW, 18).fill('#111')
+    doc.fontSize(8).font('Sans-Bold').fillColor('#fff')
+    doc.text('No', M + cols.no + 3, tableY + 5)
+    doc.text('Uds', M + cols.uds + 3, tableY + 5)
+    doc.text('SKU', M + cols.sku + 3, tableY + 5)
+    doc.text('Descripción', M + cols.desc + 3, tableY + 5)
+    doc.text('Precio', M + cols.precio + 3, tableY + 5)
+    doc.text('Total', M + cols.total + 3, tableY + 5)
+
+    // Filas
+    let rowY = tableY + 18
+    let netTotal = 0
+    note.lines.forEach((line, i) => {
+      const price = line.part?.cost_price ?? 0
+      const lineTotal = price * line.quantity
+      netTotal += lineTotal
+      const bg = i % 2 === 0 ? '#f9f9f9' : '#ffffff'
+      doc.rect(M, rowY, PW, 16).fill(bg)
+      doc.fontSize(8).font('Sans-Bold').fillColor('#333').text(String(i + 1), M + cols.no + 3, rowY + 4)
+      doc.font('Sans').text(String(line.quantity), M + cols.uds + 3, rowY + 4)
+      doc.text(line.part?.code || '—', M + cols.sku + 3, rowY + 4, { width: 75, ellipsis: true })
+      doc.text(line.part?.name || '—', M + cols.desc + 3, rowY + 4, { width: cols.precio - cols.desc - 6, ellipsis: true })
+      doc.text(`${price.toFixed(2)} €`, M + cols.precio + 3, rowY + 4)
+      doc.text(`${lineTotal.toFixed(2)} €`, M + cols.total + 3, rowY + 4)
+      rowY += 16
+    })
+
+    // ── Totales ──
+    const totX = M + PW - 200
+    const totW = 200
+    rowY += 6
+    doc.rect(totX, rowY, totW, 16).fill('#f0f0f0')
+    doc.fontSize(8).font('Sans').fillColor('#333').text('Net. Total', totX + 6, rowY + 4)
+    doc.font('Sans-Bold').text(`${netTotal.toFixed(2)} €`, totX + totW - 70, rowY + 4)
+    rowY += 16
+    doc.rect(totX, rowY, totW, 16).fill('#f9f9f9')
+    doc.fontSize(8).font('Sans').fillColor('#333').text('TAX 0%', totX + 6, rowY + 4)
+    doc.font('Sans-Bold').text('0.00 €', totX + totW - 70, rowY + 4)
+    rowY += 16
+    doc.rect(totX, rowY, totW, 18).fill('#111')
+    doc.fontSize(9).font('Sans-Bold').fillColor('#fff').text('Total', totX + 6, rowY + 4)
+    doc.text(`${netTotal.toFixed(2)} €`, totX + totW - 70, rowY + 4)
+
+    // ── Pie: HS Code, origen, peso ──
+    rowY += 28
+    doc.fontSize(8).font('Sans').fillColor('#333')
+      .text('HS-Code: 95069190', M, rowY)
+      .text('País de Origen: China', M, doc.y + 2)
+
+    // Peso
+    const netWeight = note.lines.reduce((s, l) => s + ((l.part?.weight_kg ?? 0) * l.quantity), 0)
+    const grossWeight = note.gross_weight_kg ?? netWeight
+    doc.text(`Bultos: ${note.parcels || 1}   Peso Neto: ${netWeight.toFixed(3)} kg   Peso Bruto: ${grossWeight.toFixed(3)} kg`, M, doc.y + 2)
+
+    // Texto en inglés adicional
+    doc.fontSize(7.5).fillColor('#666')
+      .text('"Free replacement under warranty. No charge to customer. Customs value declared for import purposes only."', M, doc.y + 6, { width: PW })
+
+    // Firma
+    const sigY = doc.y + 20
+    doc.moveTo(M, sigY + 20).lineTo(M + 160, sigY + 20).stroke('#aaa')
+    doc.moveTo(M + PW - 160, sigY + 20).lineTo(M + PW, sigY + 20).stroke('#aaa')
+    doc.fontSize(7.5).font('Sans').fillColor('#888')
+      .text('Firma remitente', M, sigY + 23)
+      .text('Firma destinatario', M + PW - 160, sigY + 23)
+
+    doc.fontSize(8).font('Sans').fillColor('#888').text('Gracias por su Compra', M, sigY + 40, { width: PW, align: 'center' })
+
+    doc.end()
+  })
+}
+
 module.exports = router

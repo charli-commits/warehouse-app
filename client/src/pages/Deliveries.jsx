@@ -999,6 +999,12 @@ export default function Deliveries() {
                       className="inline-flex items-center gap-1.5 bg-green-50 hover:bg-green-100 text-green-700 text-xs font-medium px-3 py-1.5 rounded-md">
                       📦 Packing list
                     </button>
+                    {n.gls_incoterm && (
+                      <a href={`/api/deliveries/${n.id}/proforma-pdf`} target="_blank" rel="noreferrer"
+                        className="inline-flex items-center gap-1.5 bg-orange-50 hover:bg-orange-100 text-orange-700 text-xs font-medium px-3 py-1.5 rounded-md">
+                        🧾 Factura proforma
+                      </a>
+                    )}
                     {n.status !== 'DRAFT' && (
                       <label className="inline-flex items-center gap-1.5 bg-gray-50 hover:bg-gray-100 text-gray-600 text-xs font-medium px-3 py-1.5 rounded-md cursor-pointer">
                         📎 {n.gls_label_url ? 'Reemplazar PDF' : 'Adjuntar PDF'}
