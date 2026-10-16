@@ -500,6 +500,21 @@ export default function Deliveries() {
     catch (err) { alert(err.message) }
   }
 
+  async function handleProforma(id, clientRef) {
+    try {
+      const token = JSON.parse(localStorage.getItem('wh_user') || '{}')?.token
+      const res = await fetch(`/api/deliveries/${id}/proforma-pdf`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {}
+      })
+      if (!res.ok) { const e = await res.json(); throw new Error(e.error || 'Error generando proforma') }
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url; a.download = `proforma-${clientRef || id}.pdf`; a.click()
+      URL.revokeObjectURL(url)
+    } catch (err) { alert(err.message) }
+  }
+
   async function handlePackingList(id, ref) {
     try {
       const token = JSON.parse(localStorage.getItem('wh_user') || '{}')?.token
@@ -1000,10 +1015,10 @@ export default function Deliveries() {
                       📦 Packing list
                     </button>
                     {n.gls_incoterm && (
-                      <a href={`/api/deliveries/${n.id}/proforma-pdf`} target="_blank" rel="noreferrer"
+                      <button onClick={() => handleProforma(n.id, n.client_ref)}
                         className="inline-flex items-center gap-1.5 bg-orange-50 hover:bg-orange-100 text-orange-700 text-xs font-medium px-3 py-1.5 rounded-md">
                         🧾 Factura proforma
-                      </a>
+                      </button>
                     )}
                     {n.status !== 'DRAFT' && (
                       <label className="inline-flex items-center gap-1.5 bg-gray-50 hover:bg-gray-100 text-gray-600 text-xs font-medium px-3 py-1.5 rounded-md cursor-pointer">
