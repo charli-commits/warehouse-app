@@ -1,0 +1,1 @@
+ALTER TABLE "DeliveryNote" ADD COLUMN IF NOT EXISTS "gross_weight_kg" DOUBLE PRECISION;

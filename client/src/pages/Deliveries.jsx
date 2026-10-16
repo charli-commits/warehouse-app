@@ -110,11 +110,13 @@ function DeliveryForm({ initial, onSave, onCancel }) {
     gls_retorno: initial?.gls_retorno ?? false,
     gls_horario: initial?.gls_horario ?? 0,
     gls_incoterm: initial?.gls_incoterm ?? 'DDP',
+    gross_weight_kg: initial?.gross_weight_kg ?? '',
     lines: initial?.lines?.map(l => ({
       part_id: l.part_id,
       part_code: l.part?.code ?? '',
       part_name: l.part?.name ?? '',
       part_unit: l.part?.unit ?? 'ud',
+      part_weight_kg: l.part?.weight_kg ?? null,
       quantity: l.quantity,
     })) ?? []
   })
@@ -172,6 +174,7 @@ function DeliveryForm({ initial, onSave, onCancel }) {
         gls_retorno: form.gls_retorno,
         gls_horario: Number(form.gls_horario),
         gls_incoterm: form.gls_incoterm || 'DDP',
+        gross_weight_kg: form.gross_weight_kg !== '' ? Number(form.gross_weight_kg) : null,
         lines: form.lines.map(l => ({ part_id: Number(l.part_id), quantity: Number(l.quantity) }))
       })
     } catch (err) { setError(err.message) }
@@ -353,6 +356,41 @@ function DeliveryForm({ initial, onSave, onCancel }) {
           </select>
         </div>
       )}
+      {form.gls_incoterm && (() => {
+        const netWeight = form.lines.reduce((sum, l) => {
+          if (l.part_weight_kg != null) return sum + (l.part_weight_kg * Number(l.quantity || 0))
+          return sum
+        }, 0)
+        const missingWeight = form.lines.some(l => l.part_weight_kg == null && l.part_id)
+        return (
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-medium text-blue-700">Peso para factura proforma</span>
+              {missingWeight && (
+                <span className="text-xs text-orange-600">⚠️ Hay piezas sin peso configurado</span>
+              )}
+            </div>
+            <div className="flex gap-4 items-end">
+              <div>
+                <div className="text-xs text-gray-500 mb-0.5">Peso neto calculado</div>
+                <div className="text-sm font-semibold text-gray-800">
+                  {netWeight > 0 ? `${netWeight.toFixed(3)} kg` : '—'}
+                </div>
+              </div>
+              <div className="flex-1">
+                <label className="block text-xs text-gray-500 mb-0.5">Peso bruto (kg) <span className="text-gray-400 font-normal">editable</span></label>
+                <input
+                  type="number" step="0.001" min="0"
+                  value={form.gross_weight_kg}
+                  onChange={e => setForm(f => ({ ...f, gross_weight_kg: e.target.value }))}
+                  placeholder={netWeight > 0 ? `ej: ${(netWeight * 1.05).toFixed(3)}` : '0.000'}
+                  className="w-full border border-gray-300 rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+            </div>
+          </div>
+        )
+      })()}
       <label className="flex items-center gap-2 cursor-pointer">
         <input type="checkbox" checked={form.gls_retorno} onChange={e => setForm(f => ({ ...f, gls_retorno: e.target.checked }))} className="rounded" />
         <span className="text-sm text-gray-700">Con retorno GLS <span className="text-gray-400 text-xs">(recogida del paquete devuelto)</span></span>
@@ -949,6 +987,7 @@ export default function Deliveries() {
                       ? <div className="text-sm font-medium text-gray-700">🚚 {n.carrier}</div>
                       : <p className="text-sm text-gray-400">Sin transportista asignado</p>}
                     {n.gls_incoterm && <div className="text-xs text-gray-500">Incoterm: <span className={`font-semibold ${n.gls_incoterm === 'DDP' ? 'text-orange-600' : 'text-gray-700'}`}>{n.gls_incoterm}</span></div>}
+                    {n.gross_weight_kg != null && <div className="text-xs text-gray-500">Peso bruto: <span className="font-semibold text-gray-700">{n.gross_weight_kg} kg</span></div>}
                     {n.gls_tracking && <span className="inline-flex items-center gap-1"><span className="font-mono text-sm text-blue-600 select-all cursor-text">{n.gls_tracking}</span><a href="https://gls-group.eu/ES/es/home/" target="_blank" rel="noreferrer" title="Abrir seguimiento GLS" className="text-blue-400 hover:text-blue-600">🔗</a></span>}
                     {n.gls_label_url && (
                       <a href={`/api/deliveries/${n.id}/label`} target="_blank" rel="noreferrer"

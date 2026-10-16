@@ -146,7 +146,7 @@ router.get('/', async (req, res) => {
   const notes = await prisma.deliveryNote.findMany({
     where,
     include: {
-      lines: { include: { part: { select: { id: true, code: true, name: true, unit: true } } } },
+      lines: { include: { part: { select: { id: true, code: true, name: true, unit: true, weight_kg: true, cost_price: true } } } },
       createdBy: { select: { id: true, name: true } }
     },
     orderBy: { created_at: 'desc' }
@@ -208,7 +208,7 @@ router.get('/albaranes-pdf', async (req, res) => {
     }
     const notes = await prisma.deliveryNote.findMany({
       where,
-      include: { lines: { include: { part: { select: { id: true, code: true, name: true, unit: true } } } } },
+      include: { lines: { include: { part: { select: { id: true, code: true, name: true, unit: true, weight_kg: true, cost_price: true } } } } },
       orderBy: { id: 'asc' }
     })
     if (notes.length === 0)
@@ -309,7 +309,7 @@ router.get('/:id', async (req, res) => {
   const note = await prisma.deliveryNote.findUnique({
     where: { id: Number(req.params.id) },
     include: {
-      lines: { include: { part: { select: { id: true, code: true, name: true, unit: true } } } }
+      lines: { include: { part: { select: { id: true, code: true, name: true, unit: true, weight_kg: true, cost_price: true } } } }
     }
   })
   if (!note) return res.status(404).json({ error: 'Delivery note not found' })
@@ -339,7 +339,7 @@ router.post('/', async (req, res) => {
         }
       },
       include: {
-        lines: { include: { part: { select: { id: true, code: true, name: true, unit: true } } } }
+        lines: { include: { part: { select: { id: true, code: true, name: true, unit: true, weight_kg: true, cost_price: true } } } }
       }
     })
     await prisma.deliveryNoteEvent.create({ data: { delivery_note_id: note.id, status: 'DRAFT' } })
@@ -353,7 +353,7 @@ router.post('/', async (req, res) => {
 router.put('/:id', async (req, res) => {
   const id = Number(req.params.id)
   try {
-    const { odoo_partner_id, odoo_partner_name, shipping_address, notes, client_ref, parcels, lines, gls_retorno, gls_horario, gls_incoterm } = req.body
+    const { odoo_partner_id, odoo_partner_name, shipping_address, notes, client_ref, parcels, lines, gls_retorno, gls_horario, gls_incoterm, gross_weight_kg } = req.body
     const updateData = {
       ...(odoo_partner_id !== undefined && { odoo_partner_id: odoo_partner_id ? Number(odoo_partner_id) : null }),
       ...(odoo_partner_name !== undefined && { odoo_partner_name }),
@@ -364,6 +364,7 @@ router.put('/:id', async (req, res) => {
       ...(gls_retorno !== undefined && { gls_retorno: gls_retorno === true }),
       ...(gls_horario !== undefined && { gls_horario: gls_horario != null ? Number(gls_horario) : null }),
       ...(gls_incoterm !== undefined && { gls_incoterm: gls_incoterm || null }),
+      ...(gross_weight_kg !== undefined && { gross_weight_kg: gross_weight_kg != null ? Number(gross_weight_kg) : null }),
     }
 
     if (lines) {
@@ -380,7 +381,7 @@ router.put('/:id', async (req, res) => {
       where: { id },
       data: updateData,
       include: {
-        lines: { include: { part: { select: { id: true, code: true, name: true, unit: true } } } }
+        lines: { include: { part: { select: { id: true, code: true, name: true, unit: true, weight_kg: true, cost_price: true } } } }
       }
     })
     res.json(note)
@@ -430,7 +431,7 @@ router.post('/:id/confirm', async (req, res) => {
   const updated = await prisma.deliveryNote.findUnique({
     where: { id },
     include: {
-      lines: { include: { part: { select: { id: true, code: true, name: true, unit: true } } } }
+      lines: { include: { part: { select: { id: true, code: true, name: true, unit: true, weight_kg: true, cost_price: true } } } }
     }
   })
   res.json(updated)
@@ -445,7 +446,7 @@ router.post('/:id/start-picking', async (req, res) => {
   await prisma.deliveryNoteEvent.create({ data: { delivery_note_id: id, status: 'PICKING' } })
   const updated = await prisma.deliveryNote.update({
     where: { id }, data: { status: 'PICKING' },
-    include: { lines: { include: { part: { select: { id: true, code: true, name: true, unit: true } }, pickingLine: true } } }
+    include: { lines: { include: { part: { select: { id: true, code: true, name: true, unit: true, weight_kg: true, cost_price: true } }, pickingLine: true } } }
   })
   res.json(updated)
 })
@@ -551,7 +552,7 @@ router.post('/:id/verify-line', async (req, res) => {
 
   const updated = await prisma.deliveryNote.findUnique({
     where: { id },
-    include: { lines: { include: { part: { select: { id: true, code: true, name: true, unit: true } }, pickingLine: true } } }
+    include: { lines: { include: { part: { select: { id: true, code: true, name: true, unit: true, weight_kg: true, cost_price: true } }, pickingLine: true } } }
   })
   res.json(updated)
 })
@@ -565,7 +566,7 @@ router.post('/:id/close-picking', async (req, res) => {
   await prisma.deliveryNoteEvent.create({ data: { delivery_note_id: id, status: 'READY' } })
   const updated = await prisma.deliveryNote.update({
     where: { id }, data: { status: 'READY' },
-    include: { lines: { include: { part: { select: { id: true, code: true, name: true, unit: true } }, pickingLine: true } } }
+    include: { lines: { include: { part: { select: { id: true, code: true, name: true, unit: true, weight_kg: true, cost_price: true } }, pickingLine: true } } }
   })
   res.json(updated)
 })
@@ -664,7 +665,7 @@ router.post('/:id/ship', async (req, res) => {
       gls_label_url,
     },
     include: {
-      lines: { include: { part: { select: { id: true, code: true, name: true, unit: true } } } }
+      lines: { include: { part: { select: { id: true, code: true, name: true, unit: true, weight_kg: true, cost_price: true } } } }
     }
   })
   res.json(updated)
@@ -679,7 +680,7 @@ router.post('/:id/force-ready', async (req, res) => {
   const updated = await prisma.deliveryNote.update({
     where: { id },
     data: { status: 'READY', gls_tracking: null, gls_codbarras: null },
-    include: { lines: { include: { part: { select: { id: true, code: true, name: true, unit: true } } } } }
+    include: { lines: { include: { part: { select: { id: true, code: true, name: true, unit: true, weight_kg: true, cost_price: true } } } } }
   })
   await prisma.deliveryNoteEvent.create({ data: { delivery_note_id: id, status: 'READY' } })
   res.json(updated)
@@ -702,7 +703,7 @@ router.post('/:id/cancel-gls', async (req, res) => {
   const updated = await prisma.deliveryNote.update({
     where: { id },
     data: { status: 'READY', gls_tracking: null, gls_codbarras: null },
-    include: { lines: { include: { part: { select: { id: true, code: true, name: true, unit: true } } } } }
+    include: { lines: { include: { part: { select: { id: true, code: true, name: true, unit: true, weight_kg: true, cost_price: true } } } } }
   })
   await prisma.deliveryNoteEvent.create({ data: { delivery_note_id: id, status: 'READY' } })
   res.json(updated)
@@ -717,7 +718,7 @@ router.patch('/:id/tracking', async (req, res) => {
   const updated = await prisma.deliveryNote.update({
     where: { id },
     data: { gls_tracking: gls_tracking || null },
-    include: { lines: { include: { part: { select: { id: true, code: true, name: true, unit: true } } } } }
+    include: { lines: { include: { part: { select: { id: true, code: true, name: true, unit: true, weight_kg: true, cost_price: true } } } } }
   })
   res.json(updated)
 })
@@ -741,7 +742,7 @@ router.post('/:id/label', express.raw({ type: 'application/pdf', limit: '10mb' }
   const updated = await prisma.deliveryNote.update({
     where: { id },
     data: { gls_label_url },
-    include: { lines: { include: { part: { select: { id: true, code: true, name: true, unit: true } } } } }
+    include: { lines: { include: { part: { select: { id: true, code: true, name: true, unit: true, weight_kg: true, cost_price: true } } } } }
   })
   res.json(updated)
 })
@@ -889,7 +890,7 @@ router.get('/:id/packing-list', async (req, res) => {
     const id = Number(req.params.id)
     const note = await prisma.deliveryNote.findUnique({
       where: { id },
-      include: { lines: { include: { part: { select: { id: true, code: true, name: true, unit: true } } } } }
+      include: { lines: { include: { part: { select: { id: true, code: true, name: true, unit: true, weight_kg: true, cost_price: true } } } } }
     })
     if (!note) return res.status(404).json({ error: 'Albarán no encontrado' })
     const fifoLocs = await getFifoLocs(note.lines.map(l => l.part_id).filter(Boolean))
@@ -914,7 +915,7 @@ router.post('/:id/deliver', async (req, res) => {
     where: { id },
     data: { status: 'DELIVERED' },
     include: {
-      lines: { include: { part: { select: { id: true, code: true, name: true, unit: true } } } }
+      lines: { include: { part: { select: { id: true, code: true, name: true, unit: true, weight_kg: true, cost_price: true } } } }
     }
   })
   res.json(updated)
