@@ -117,6 +117,7 @@ function DeliveryForm({ initial, onSave, onCancel }) {
       part_name: l.part?.name ?? '',
       part_unit: l.part?.unit ?? 'ud',
       part_weight_kg: l.part?.weight_kg ?? null,
+      customs_price: l.customs_price ?? l.part?.cost_price ?? '',
       quantity: l.quantity,
     })) ?? []
   })
@@ -175,7 +176,7 @@ function DeliveryForm({ initial, onSave, onCancel }) {
         gls_horario: Number(form.gls_horario),
         gls_incoterm: form.gls_incoterm || 'DDP',
         gross_weight_kg: form.gross_weight_kg !== '' ? Number(form.gross_weight_kg) : null,
-        lines: form.lines.map(l => ({ part_id: Number(l.part_id), quantity: Number(l.quantity) }))
+        lines: form.lines.map(l => ({ part_id: Number(l.part_id), quantity: Number(l.quantity), customs_price: l.customs_price !== '' && l.customs_price != null ? Number(l.customs_price) : null }))
       })
     } catch (err) { setError(err.message) }
     finally { setSaving(false) }
@@ -363,13 +364,35 @@ function DeliveryForm({ initial, onSave, onCancel }) {
         }, 0)
         const missingWeight = form.lines.some(l => l.part_weight_kg == null && l.part_id)
         return (
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 space-y-2">
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 space-y-3">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-medium text-blue-700">Peso para factura proforma</span>
+              <span className="text-xs font-medium text-blue-700">Datos para factura proforma (aduanas)</span>
               {missingWeight && (
                 <span className="text-xs text-orange-600">⚠️ Hay piezas sin peso configurado</span>
               )}
             </div>
+            {/* Precios por línea */}
+            {form.lines.filter(l => l.part_id).length > 0 && (
+              <div>
+                <div className="text-xs text-gray-500 mb-1.5">Precio aduanero por pieza (€)</div>
+                <div className="space-y-1.5">
+                  {form.lines.filter(l => l.part_id).map((l, i) => (
+                    <div key={i} className="flex items-center gap-2">
+                      <span className="text-xs text-gray-600 flex-1 truncate">{l.part_name || l.part_code}</span>
+                      <input
+                        type="number" step="0.01" min="0"
+                        value={l.customs_price ?? ''}
+                        onChange={e => setForm(f => ({ ...f, lines: f.lines.map((ll, ii) => ii === i ? { ...ll, customs_price: e.target.value } : ll) }))}
+                        placeholder="0.00"
+                        className="w-24 border border-gray-300 rounded px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                      <span className="text-xs text-gray-400">€</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            {/* Pesos */}
             <div className="flex gap-4 items-end">
               <div>
                 <div className="text-xs text-gray-500 mb-0.5">Peso neto calculado</div>
@@ -378,7 +401,7 @@ function DeliveryForm({ initial, onSave, onCancel }) {
                 </div>
               </div>
               <div className="flex-1">
-                <label className="block text-xs text-gray-500 mb-0.5">Peso bruto (kg) <span className="text-gray-400 font-normal">editable</span></label>
+                <label className="block text-xs text-gray-500 mb-0.5">Peso bruto (kg)</label>
                 <input
                   type="number" step="0.001" min="0"
                   value={form.gross_weight_kg}

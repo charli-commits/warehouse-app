@@ -171,6 +171,7 @@ model DeliveryNoteLine {
   delivery_note_id Int
   part_id          Int
   quantity         Float
+  customs_price    Float?  // precio aduanero declarado (puede diferir del cost_price)
 
   delivery    DeliveryNote @relation(fields: [delivery_note_id], references: [id], onDelete: Cascade)
   part        Part         @relation(fields: [part_id], references: [id])

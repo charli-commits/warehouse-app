@@ -1,0 +1,1 @@
+ALTER TABLE "DeliveryNoteLine" ADD COLUMN IF NOT EXISTS "customs_price" DOUBLE PRECISION;

@@ -335,6 +335,7 @@ router.post('/', async (req, res) => {
           create: lines.map(l => ({
             part_id: Number(l.part_id),
             quantity: Number(l.quantity),
+            customs_price: l.customs_price != null ? Number(l.customs_price) : null,
           }))
         }
       },
@@ -373,6 +374,7 @@ router.put('/:id', async (req, res) => {
         create: lines.map(l => ({
           part_id: Number(l.part_id),
           quantity: Number(l.quantity),
+          customs_price: l.customs_price != null ? Number(l.customs_price) : null,
         }))
       }
     }
@@ -1161,16 +1163,14 @@ function buildProformaPDF(note, proformaNum) {
     // ── "Esta es su factura" ──
     doc.fontSize(11).font('Sans-Bold').fillColor('#000').text('Esta es su factura', M, afterHeader, { width: PW, align: 'center' })
 
-    // ── Orden / Factura / Fecha ──
+    // ── Factura / Fecha ──
     const infoY = doc.y + 10
     doc.fontSize(8).font('Sans-Bold').fillColor('#555')
-    doc.text('Orden Nº', M, infoY)
-    doc.text('Factura Nº', M + PW * 0.33, infoY)
-    doc.text('Fecha de Factura', M + PW * 0.66, infoY)
+    doc.text('Factura Nº', M, infoY)
+    doc.text('Fecha de Factura', M + PW * 0.5, infoY)
     doc.fontSize(9).font('Sans-Bold').fillColor('#000')
-    doc.text(note.client_ref || `ALB-${note.id}`, M, doc.y)
-    doc.text(proformaNum, M + PW * 0.33, infoY + 12)
-    doc.text(dateStr, M + PW * 0.66, infoY + 12)
+    doc.text(proformaNum, M, infoY + 12)
+    doc.text(dateStr, M + PW * 0.5, infoY + 12)
 
     // ── Nota garantía ──
     const noteY = doc.y + 14
@@ -1188,7 +1188,7 @@ function buildProformaPDF(note, proformaNum) {
     const cols = { no: 0, uds: 28, sku: 68, desc: 150, precio: PW - 100, total: PW - 40 }
 
     // Cabecera tabla
-    doc.rect(M, tableY, PW, 18).fill('#111')
+    doc.rect(M, tableY, PW, 18).fill('#E8621A')
     doc.fontSize(8).font('Sans-Bold').fillColor('#fff')
     doc.text('No', M + cols.no + 3, tableY + 5)
     doc.text('Uds', M + cols.uds + 3, tableY + 5)
@@ -1201,7 +1201,7 @@ function buildProformaPDF(note, proformaNum) {
     let rowY = tableY + 18
     let netTotal = 0
     note.lines.forEach((line, i) => {
-      const price = line.part?.cost_price ?? 0
+      const price = line.customs_price ?? line.part?.cost_price ?? 0
       const lineTotal = price * line.quantity
       netTotal += lineTotal
       const bg = i % 2 === 0 ? '#f9f9f9' : '#ffffff'
