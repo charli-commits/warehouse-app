@@ -276,6 +276,7 @@ export default function PartDetail() {
           </div>
           <Stat label="Stock mínimo" value={`${part.stock_min} ${part.unit}`} />
           <Stat label="Precio coste" value={part.cost_price != null ? `${Number(part.cost_price).toFixed(2)} €` : '—'} />
+          <Stat label="Peso neto" value={part.weight_kg != null ? `${part.weight_kg} kg` : '—'} />
           <Stat label="Categoría" value={part.category || '—'} />
           <Stat label="Unidad" value={part.unit} />
           {part.manufacturer && <Stat label="Fabricante" value={part.manufacturer} />}

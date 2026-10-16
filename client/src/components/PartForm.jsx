@@ -3,7 +3,7 @@ import { api } from '../lib/api'
 
 const empty = {
   code: '', name: '', description: '', category: '', unit: 'ud',
-  stock_current: 0, stock_min: 0, location: '', cost_price: '',
+  stock_current: 0, stock_min: 0, location: '', cost_price: '', weight_kg: '',
   odoo_product_id: '', odoo_product_name: ''
 }
 
@@ -123,6 +123,7 @@ export default function PartForm({ initial, onSave, onCancel }) {
         stock_current: Number(form.stock_current),
         stock_min: Number(form.stock_min),
         cost_price: form.cost_price !== '' ? Number(form.cost_price) : null,
+        weight_kg: form.weight_kg !== '' ? Number(form.weight_kg) : null,
         odoo_product_id: form.odoo_product_id !== '' ? Number(form.odoo_product_id) : null,
       }
       await onSave(data)
@@ -184,6 +185,9 @@ export default function PartForm({ initial, onSave, onCancel }) {
         {field('Stock actual', 'stock_current', 'number', { step: '0.01' })}
         {field('Stock mínimo', 'stock_min', 'number', { step: '0.01' })}
         {field('Precio coste (€)', 'cost_price', 'number', { step: '0.01', placeholder: '0.00' })}
+      </div>
+      <div className="grid grid-cols-3 gap-4">
+        {field('Peso neto (kg)', 'weight_kg', 'number', { step: '0.001', placeholder: '0.000', title: 'Peso de la pieza en kg. Se usa para calcular el peso total en facturas proforma de aduanas.' })}
       </div>
 
       <div>

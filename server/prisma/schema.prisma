@@ -21,6 +21,7 @@ model Part {
   odoo_product_name String?
   manufacturer     String?
   cost_price       Float?
+  weight_kg        Float?   // peso neto en kg (para facturas proforma aduanas)
   image_url        String?
   created_at       DateTime @default(now())
   updated_at       DateTime @updatedAt
