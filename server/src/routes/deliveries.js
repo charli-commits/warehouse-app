@@ -1161,7 +1161,7 @@ function buildProformaPDF(note, proformaNum) {
     const afterHeader = doc.y + 16
 
     // ── "Esta es su factura" ──
-    doc.fontSize(11).font('Sans-Bold').fillColor('#000').text('Esta es su factura', M, afterHeader, { width: PW, align: 'center' })
+    doc.fontSize(11).font('Sans-Bold').fillColor('#000').text('Factura Proforma', M, afterHeader, { width: PW, align: 'center' })
 
     // ── Factura / Fecha ──
     const infoY = doc.y + 10
