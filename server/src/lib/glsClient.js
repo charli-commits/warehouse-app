@@ -130,6 +130,14 @@ function needsCustoms(country) {
   return !EU_ISO.has(iso)
 }
 
+// Odoo sometimes stores Italian (and other) zip codes with province prefix: MN46051 → 46051
+// Strip leading 2-letter alphabetic prefix when followed only by digits (not UK-style codes)
+function sanitizeZip(zip) {
+  if (!zip) return ''
+  const stripped = String(zip).trim().replace(/^[A-Z]{2}(\d+)$/i, '$1')
+  return stripped
+}
+
 // Valid nacional combos (from ES-GLS-Maestros_V2.xlsx "Servicios&Horarios"):
 //   96 / 18 → BusinessParcel 24-48h (default)
 //   37 / 18 → EconomyParcel 72h
@@ -184,7 +192,7 @@ function buildShipmentXml({ recipient, ref, fecha, parcels = 1, retorno = 0, ser
       <Poblacion><![CDATA[${recipient.city}]]></Poblacion>
       <Provincia><![CDATA[${recipient.province || recipient.city}]]></Provincia>
       <Pais>${glsCountryCode(recipient.country)}</Pais>
-      <CP>${recipient.zip}</CP>
+      <CP>${sanitizeZip(recipient.zip)}</CP>
       <Telefono><![CDATA[${recipient.phone || ''}]]></Telefono>
       <Movil><![CDATA[${recipient.mobile || ''}]]></Movil>
       <Email><![CDATA[${recipient.email || ''}]]></Email>
