@@ -120,6 +120,16 @@ function glsCountryCode(country) {
   return GLS_COUNTRY_CODES[iso] ?? 34
 }
 
+const EU_ISO = new Set([
+  'AT','BE','BG','CY','CZ','DE','DK','EE','ES','FI','FR','GR','HR',
+  'HU','IE','IT','LT','LU','LV','MT','NL','PL','PT','RO','SE','SI','SK'
+])
+
+function needsCustoms(country) {
+  const iso = resolveCountryIso(country)
+  return !EU_ISO.has(iso)
+}
+
 // Valid nacional combos (from ES-GLS-Maestros_V2.xlsx "Servicios&Horarios"):
 //   96 / 18 → BusinessParcel 24-48h (default)
 //   37 / 18 → EconomyParcel 72h
@@ -186,7 +196,7 @@ function buildShipmentXml({ recipient, ref, fecha, parcels = 1, retorno = 0, ser
     <Importes>
       <Reembolso></Reembolso>
     </Importes>
-    ${isInternational && incoterm ? `<Aduanas><Incoterm>${incoterm === 'DDP' ? 10 : 20}</Incoterm></Aduanas>` : ''}
+    ${isInternational && incoterm && needsCustoms(recipient.country) ? `<Aduanas><Incoterm>${incoterm === 'DDP' ? 10 : 20}</Incoterm></Aduanas>` : ''}
   </Envio>
 </Servicios>`
 }
