@@ -319,7 +319,7 @@ router.get('/:id', async (req, res) => {
 // POST /api/deliveries
 router.post('/', async (req, res) => {
   try {
-    const { odoo_partner_id, odoo_partner_name, shipping_address, notes, client_ref, lines = [], created_by_id, gls_retorno, gls_horario, gls_incoterm } = req.body
+    const { odoo_partner_id, odoo_partner_name, shipping_address, notes, client_ref, lines = [], created_by_id, gls_retorno, gls_horario, gls_incoterm, needs_proforma } = req.body
     const note = await prisma.deliveryNote.create({
       data: {
         odoo_partner_id: odoo_partner_id ? Number(odoo_partner_id) : null,
@@ -330,6 +330,7 @@ router.post('/', async (req, res) => {
         gls_retorno: gls_retorno === true,
         gls_horario: gls_horario != null ? Number(gls_horario) : null,
         gls_incoterm: gls_incoterm || null,
+        needs_proforma: needs_proforma === true,
         created_by_id: created_by_id ? Number(created_by_id) : null,
         lines: {
           create: lines.map(l => ({
@@ -354,7 +355,7 @@ router.post('/', async (req, res) => {
 router.put('/:id', async (req, res) => {
   const id = Number(req.params.id)
   try {
-    const { odoo_partner_id, odoo_partner_name, shipping_address, notes, client_ref, parcels, lines, gls_retorno, gls_horario, gls_incoterm, gross_weight_kg } = req.body
+    const { odoo_partner_id, odoo_partner_name, shipping_address, notes, client_ref, parcels, lines, gls_retorno, gls_horario, gls_incoterm, gross_weight_kg, needs_proforma } = req.body
     const updateData = {
       ...(odoo_partner_id !== undefined && { odoo_partner_id: odoo_partner_id ? Number(odoo_partner_id) : null }),
       ...(odoo_partner_name !== undefined && { odoo_partner_name }),
@@ -366,6 +367,7 @@ router.put('/:id', async (req, res) => {
       ...(gls_horario !== undefined && { gls_horario: gls_horario != null ? Number(gls_horario) : null }),
       ...(gls_incoterm !== undefined && { gls_incoterm: gls_incoterm || null }),
       ...(gross_weight_kg !== undefined && { gross_weight_kg: gross_weight_kg != null ? Number(gross_weight_kg) : null }),
+      ...(needs_proforma !== undefined && { needs_proforma: needs_proforma === true }),
     }
 
     if (lines) {
@@ -1083,14 +1085,27 @@ router.post('/sync-gls-status', async (req, res) => {
   res.json({ ok: true, ...results })
 })
 
-// GET /api/deliveries/:id/proforma-pdf
-router.get('/:id/proforma-pdf', async (req, res) => {
+// POST /api/deliveries/:id/proforma-pdf
+// Body: { lines: [{ id: lineId, customs_price: number }] }
+router.post('/:id/proforma-pdf', async (req, res) => {
+  const id = Number(req.params.id)
+  const { lines: pricedLines = [] } = req.body
+
+  // Save customs_price overrides per line
+  if (pricedLines.length > 0) {
+    await Promise.all(pricedLines.map(l =>
+      prisma.deliveryNoteLine.update({
+        where: { id: Number(l.id) },
+        data: { customs_price: l.customs_price != null ? Number(l.customs_price) : null }
+      })
+    ))
+  }
+
   const note = await prisma.deliveryNote.findUnique({
-    where: { id: Number(req.params.id) },
+    where: { id },
     include: { lines: { include: { part: { select: { id: true, code: true, name: true, unit: true, weight_kg: true, cost_price: true } } } } }
   })
   if (!note) return res.status(404).json({ error: 'Albarán no encontrado' })
-  if (!note.gls_incoterm) return res.status(400).json({ error: 'Este albarán no tiene incoterm — no requiere factura proforma' })
 
   // Generate sequential proforma number per client_ref
   const refKey = `proforma_seq_${note.client_ref || note.id}`

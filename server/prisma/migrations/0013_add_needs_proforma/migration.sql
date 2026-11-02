@@ -1,0 +1,1 @@
+ALTER TABLE "DeliveryNote" ADD COLUMN IF NOT EXISTS "needs_proforma" BOOLEAN NOT NULL DEFAULT false;

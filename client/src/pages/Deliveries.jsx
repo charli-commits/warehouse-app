@@ -110,6 +110,7 @@ function DeliveryForm({ initial, onSave, onCancel }) {
     gls_retorno: initial?.gls_retorno ?? false,
     gls_horario: initial?.gls_horario ?? 0,
     gls_incoterm: initial?.gls_incoterm ?? 'DDP',
+    needs_proforma: initial?.needs_proforma ?? false,
     gross_weight_kg: initial?.gross_weight_kg ?? '',
     lines: initial?.lines?.map(l => ({
       part_id: l.part_id,
@@ -175,6 +176,7 @@ function DeliveryForm({ initial, onSave, onCancel }) {
         gls_retorno: form.gls_retorno,
         gls_horario: Number(form.gls_horario),
         gls_incoterm: form.gls_incoterm || 'DDP',
+        needs_proforma: form.needs_proforma === true,
         gross_weight_kg: form.gross_weight_kg !== '' ? Number(form.gross_weight_kg) : null,
         lines: form.lines.map(l => ({ part_id: Number(l.part_id), quantity: Number(l.quantity), customs_price: l.customs_price !== '' && l.customs_price != null ? Number(l.customs_price) : null }))
       })
@@ -357,6 +359,12 @@ function DeliveryForm({ initial, onSave, onCancel }) {
           </select>
         </div>
       )}
+      <label className="flex items-center gap-2 cursor-pointer select-none">
+        <input type="checkbox" checked={form.needs_proforma === true}
+          onChange={e => setForm(f => ({ ...f, needs_proforma: e.target.checked }))}
+          className="w-4 h-4 rounded border-gray-300 text-orange-600 focus:ring-orange-500" />
+        <span className="text-sm text-gray-700">Requiere factura proforma (Canarias, Ceuta, Melilla, Andorra…)</span>
+      </label>
       {form.gls_incoterm && (() => {
         const netWeight = form.lines.reduce((sum, l) => {
           if (l.part_weight_kg != null) return sum + (l.part_weight_kg * Number(l.quantity || 0))
@@ -523,18 +531,36 @@ export default function Deliveries() {
     catch (err) { alert(err.message) }
   }
 
-  async function handleProforma(id, clientRef) {
+  const EU_ISO = new Set(['AT','BE','BG','CY','CZ','DE','DK','EE','ES','FI','FR','GR','HR','HU','IE','IT','LT','LU','LV','MT','NL','PL','PT','RO','SE','SI','SK'])
+  const COUNTRY_TO_ISO = { 'ESPAÑA':'ES','SPAIN':'ES','ALEMANIA':'DE','GERMANY':'DE','FRANCIA':'FR','FRANCE':'FR','ITALIA':'IT','ITALY':'IT','PAÍSES BAJOS':'NL','HOLANDA':'NL','NETHERLANDS':'NL','BÉLGICA':'BE','BELGICA':'BE','BELGIUM':'BE','PORTUGAL':'PT','SUECIA':'SE','SWEDEN':'SE','AUSTRIA':'AT','POLONIA':'PL','GRECIA':'GR','GREECE':'GR','RUMANÍA':'RO','RUMANIA':'RO','BULGARIA':'BG','CROACIA':'HR','HUNGRÍA':'HU','HUNGRIA':'HU','FINLANDIA':'FI','IRLANDA':'IE','CHEQUIA':'CZ','DINAMARCA':'DK','REINO UNIDO':'GB','UK':'GB','SUIZA':'CH','SWITZERLAND':'CH','NORUEGA':'NO','NORWAY':'NO' }
+  function isNonEU(country) {
+    if (!country) return false
+    const upper = country.toUpperCase().trim()
+    const iso = /^[A-Z]{2}$/.test(upper) ? upper : (COUNTRY_TO_ISO[upper] || upper)
+    return !EU_ISO.has(iso)
+  }
+  function noteNeedsProforma(note) {
+    const addr = note.shipping_address ? (typeof note.shipping_address === 'string' ? JSON.parse(note.shipping_address) : note.shipping_address) : {}
+    return note.needs_proforma || isNonEU(addr.country)
+  }
+
+  const [proformaModal, setProformaModal] = useState(null) // { note }
+
+  async function handleProformaSubmit(note, pricedLines) {
     try {
       const token = JSON.parse(localStorage.getItem('wh_user') || '{}')?.token
-      const res = await fetch(`/api/deliveries/${id}/proforma-pdf`, {
-        headers: token ? { Authorization: `Bearer ${token}` } : {}
+      const res = await fetch(`/api/deliveries/${note.id}/proforma-pdf`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+        body: JSON.stringify({ lines: pricedLines })
       })
       if (!res.ok) { const e = await res.json(); throw new Error(e.error || 'Error generando proforma') }
       const blob = await res.blob()
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
-      a.href = url; a.download = `proforma-${clientRef || id}.pdf`; a.click()
+      a.href = url; a.download = `proforma-${note.client_ref || note.id}.pdf`; a.click()
       URL.revokeObjectURL(url)
+      setProformaModal(null)
     } catch (err) { alert(err.message) }
   }
 
@@ -1037,8 +1063,8 @@ export default function Deliveries() {
                       className="inline-flex items-center gap-1.5 bg-green-50 hover:bg-green-100 text-green-700 text-xs font-medium px-3 py-1.5 rounded-md">
                       📦 Packing list
                     </button>
-                    {n.gls_incoterm && (
-                      <button onClick={() => handleProforma(n.id, n.client_ref)}
+                    {noteNeedsProforma(n) && (
+                      <button onClick={() => setProformaModal({ note: n })}
                         className="inline-flex items-center gap-1.5 bg-orange-50 hover:bg-orange-100 text-orange-700 text-xs font-medium px-3 py-1.5 rounded-md">
                         🧾 Factura proforma
                       </button>
@@ -1279,6 +1305,86 @@ export default function Deliveries() {
           </div>
         </Modal>
       )}
+
+      {proformaModal && (
+        <ProformaModal
+          note={proformaModal.note}
+          onConfirm={(pricedLines) => handleProformaSubmit(proformaModal.note, pricedLines)}
+          onCancel={() => setProformaModal(null)}
+        />
+      )}
+    </div>
+  )
+}
+
+function ProformaModal({ note, onConfirm, onCancel }) {
+  const [lines, setLines] = useState(
+    (note.lines || []).map(l => ({
+      id: l.id,
+      name: l.part?.name || `Pieza ${l.part_id}`,
+      code: l.part?.code || '',
+      quantity: l.quantity,
+      price: l.customs_price ?? l.part?.cost_price ?? ''
+    }))
+  )
+  const [saving, setSaving] = useState(false)
+
+  function setPrice(idx, val) {
+    setLines(ls => ls.map((l, i) => i === idx ? { ...l, price: val } : l))
+  }
+
+  async function handleConfirm() {
+    setSaving(true)
+    await onConfirm(lines.map(l => ({ id: l.id, customs_price: l.price !== '' ? Number(l.price) : null })))
+    setSaving(false)
+  }
+
+  const total = lines.reduce((s, l) => s + (Number(l.price || 0) * l.quantity), 0)
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+      <div className="bg-white rounded-xl shadow-xl w-full max-w-lg mx-4 p-6 space-y-4">
+        <h2 className="text-base font-semibold text-gray-800">Factura Proforma — confirmar precios</h2>
+        <p className="text-xs text-gray-500">Revisa el precio declarado por línea antes de generar el PDF.</p>
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="text-xs text-gray-500 border-b">
+              <th className="text-left pb-1">Pieza</th>
+              <th className="text-right pb-1 w-16">Uds</th>
+              <th className="text-right pb-1 w-28">Precio (€)</th>
+            </tr>
+          </thead>
+          <tbody>
+            {lines.map((l, i) => (
+              <tr key={l.id} className="border-b last:border-0">
+                <td className="py-2 pr-2">
+                  <div className="font-medium text-gray-800">{l.name}</div>
+                  <div className="text-xs text-gray-400">{l.code}</div>
+                </td>
+                <td className="py-2 text-right text-gray-600">{l.quantity}</td>
+                <td className="py-2 pl-2">
+                  <input
+                    type="number" step="0.01" min="0"
+                    value={l.price}
+                    onChange={e => setPrice(i, e.target.value)}
+                    className="w-full border border-gray-300 rounded px-2 py-1 text-right text-sm focus:outline-none focus:ring-2 focus:ring-orange-400"
+                  />
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        <div className="flex justify-between items-center pt-1">
+          <span className="text-sm font-semibold text-gray-700">Total declarado: {total.toFixed(2)} €</span>
+          <div className="flex gap-2">
+            <button onClick={onCancel} className="px-4 py-2 text-sm border rounded hover:bg-gray-50">Cancelar</button>
+            <button onClick={handleConfirm} disabled={saving}
+              className="px-4 py-2 text-sm bg-orange-600 hover:bg-orange-700 disabled:bg-orange-300 text-white rounded font-medium">
+              {saving ? 'Generando...' : 'Generar PDF'}
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
   )
 }
