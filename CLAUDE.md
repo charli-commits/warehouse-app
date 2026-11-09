@@ -16,6 +16,21 @@ Render publica automáticamente cada push a `main` en GitHub: nunca hacer push s
 ## Arrancar en local
 `npm run dev` (server + client). Solo el cliente: preview `warehouse-client` (vite :5173).
 
+## Decisiones de negocio (no tocar sin confirmar)
+- Albaranes con stock ya descontado (READY/SHIPPED/DELIVERED o con movimientos de salida)
+  no se pueden borrar, ni con ?force=1. Decisión explícita, no un bug.
+- Con stock descontado: no se cambian piezas ni cantidades; sí la cabecera y el precio
+  aduanero (se actualiza sin recrear líneas para conservar el picking).
+
+## Infraestructura clave
+- server/src/lib/inFlightLock.js — bloqueo en memoria por documento para acciones de
+  albaranes y validar/ubicar compras. Solo funciona con una instancia en Render.
+  Si se escala a varias instancias habrá que migrar a Redis u otro lock distribuido.
+
+## Antes de trabajar en local
+- Hacer `git pull` en main (dev puede quedar muy por detrás de main).
+- Regenerar cliente Prisma si el schema cambió: `cd server && npx prisma generate`.
+
 ## Ojo
-- Supabase está en plan Pro ($25/mes); revisar si se puede bajar a Free (ver README).
+- Supabase está en plan Free (bajado de Pro en oct-2026); proyectos pausan tras 1 sem. inactivos.
 - odoo-purchasing es otra app: solo de referencia, no tocarla desde aquí.
