@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { api } from '../lib/api'
 import { useAuth } from '../lib/AuthContext'
@@ -98,7 +98,11 @@ function PartnerSearch({ value, valueName, valueAddress, onSelect }) {
   )
 }
 
+// A partir de READY el albarán ya ha descontado stock: no se borra ni se cambian piezas/cantidades
+const DELETABLE_STATUSES = ['DRAFT', 'CONFIRMED']
+
 function DeliveryForm({ initial, onSave, onCancel }) {
+  const linesLocked = !!initial && !DELETABLE_STATUSES.includes(initial.status)
   const isManualInitial = !initial?.odoo_partner_id && !!initial?.odoo_partner_name
   const [manualClient, setManualClient] = useState(isManualInitial)
   const [form, setForm] = useState({
@@ -433,7 +437,19 @@ function DeliveryForm({ initial, onSave, onCancel }) {
       </div>
       <div>
         <label className="block text-xs font-medium text-gray-600 mb-2">Líneas <span className="text-gray-400 font-normal">(pieza · cantidad)</span></label>
-        <LinesEditor lines={form.lines} onChange={lines => setForm(f => ({ ...f, lines }))} mode="delivery" />
+        {linesLocked ? (
+          <div className="space-y-1">
+            {form.lines.map((l, i) => (
+              <div key={i} className="flex items-center justify-between text-sm text-gray-700 bg-gray-50 rounded px-3 py-1.5">
+                <span className="truncate">{l.part_code} · {l.part_name}</span>
+                <span className="shrink-0 ml-2 font-medium">{l.quantity} {l.part_unit}</span>
+              </div>
+            ))}
+            <p className="text-xs text-gray-400">El stock ya se ha descontado: las piezas y cantidades no se pueden cambiar.</p>
+          </div>
+        ) : (
+          <LinesEditor lines={form.lines} onChange={lines => setForm(f => ({ ...f, lines }))} mode="delivery" />
+        )}
       </div>
       {addrWarnings.length > 0 && (
         <div className="bg-amber-50 border border-amber-200 rounded-md px-3 py-2 space-y-0.5">
@@ -500,13 +516,28 @@ export default function Deliveries() {
     catch (err) { alert(err.message) }
   }
 
+  // Ignora clics repetidos mientras una acción sobre un albarán está en curso
+  const busyRef = useRef(false)
+  const [busyId, setBusyId] = useState(null)
+  async function runOnce(id, fn) {
+    if (busyRef.current) return
+    busyRef.current = true; setBusyId(id)
+    try { await fn() } finally { busyRef.current = false; setBusyId(null) }
+  }
+
   async function handleConfirm(id) {
     if (!confirm('¿Confirmar albarán? Se descontará el stock.')) return
-    try { await api.confirmDelivery(id); load() }
-    catch (err) { alert(err.message) }
+    await runOnce(id, async () => {
+      try { await api.confirmDelivery(id); load() }
+      catch (err) { alert(err.message) }
+    })
   }
 
   async function handleShip(id, carrier, parcels) {
+    await runOnce(id, () => doShip(id, carrier, parcels))
+  }
+
+  async function doShip(id, carrier, parcels) {
     try {
       const p = parcels ?? shipParcels
       if (p > 1) await api.updateDelivery(id, { parcels: p })
@@ -580,8 +611,10 @@ export default function Deliveries() {
   }
 
   async function handleDeliver(id) {
-    try { await api.deliverDelivery(id); load() }
-    catch (err) { alert(err.message) }
+    await runOnce(id, async () => {
+      try { await api.deliverDelivery(id); load() }
+      catch (err) { alert(err.message) }
+    })
   }
 
   async function handleForceReady(id) {
@@ -739,7 +772,7 @@ export default function Deliveries() {
         </td>
         <td className="px-4 py-2.5 text-right" onClick={e => e.stopPropagation()}>
           <div className="flex items-center justify-end gap-3">
-            {!['PICKING','SHIPPED','DELIVERED'].includes(note.status) && (
+            {DELETABLE_STATUSES.includes(note.status) && (
               <button onClick={() => handleDelete(note.id, note.status !== 'DRAFT')}
                 className="text-gray-200 hover:text-red-400 transition-colors" title="Eliminar">🗑</button>
             )}
@@ -771,9 +804,9 @@ export default function Deliveries() {
                       className="w-12 border border-gray-300 rounded px-1.5 py-1 text-xs text-center" />
                   </div>
                   <div className="flex gap-1.5 items-center">
-                    <button onClick={() => handleShip(note.id, 'GLS')}
+                    <button onClick={() => handleShip(note.id, 'GLS')} disabled={busyId === note.id}
                       className="bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold px-3 py-1.5 rounded-md">GLS</button>
-                    <button onClick={() => handleShip(note.id, 'DACHSER')}
+                    <button onClick={() => handleShip(note.id, 'DACHSER')} disabled={busyId === note.id}
                       className="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold px-3 py-1.5 rounded-md">DACHSER</button>
                     <button onClick={() => { setShippingId(null); setShipParcels(1) }} className="text-gray-400 text-xs">✕</button>
                   </div>
@@ -987,9 +1020,9 @@ export default function Deliveries() {
                           className="w-12 border border-gray-300 rounded px-1.5 py-1 text-xs text-center" />
                       </div>
                       <div className="flex gap-1.5">
-                        <button onClick={() => handleShip(note.id, 'GLS')}
+                        <button onClick={() => handleShip(note.id, 'GLS')} disabled={busyId === note.id}
                           className="bg-purple-600 text-white text-xs font-bold px-2.5 py-1.5 rounded-md">GLS</button>
-                        <button onClick={() => handleShip(note.id, 'DACHSER')}
+                        <button onClick={() => handleShip(note.id, 'DACHSER')} disabled={busyId === note.id}
                           className="bg-indigo-600 text-white text-xs font-bold px-2.5 py-1.5 rounded-md">DACHSER</button>
                         <button onClick={() => { setShippingId(null); setShipParcels(1) }} className="text-gray-400 text-xs px-1">✕</button>
                       </div>
@@ -1227,7 +1260,7 @@ export default function Deliveries() {
                     Forzar estado READY
                   </button>
                 )}
-                {!['SHIPPED','DELIVERED'].includes(n.status) && (
+                {DELETABLE_STATUSES.includes(n.status) && (
                   <button onClick={() => { handleDelete(n.id, n.status !== 'DRAFT'); setDetailNote(null) }}
                     className="w-full text-red-400 hover:text-red-600 text-xs font-medium py-1">
                     Eliminar albarán

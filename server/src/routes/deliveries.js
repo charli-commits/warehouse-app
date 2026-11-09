@@ -6,6 +6,8 @@ const path = require('path')
 const glsClient = require('../lib/glsClient')
 const { PDFDocument } = require('pdf-lib')
 const PDFKit = require('pdfkit')
+const inFlightLock = require('../lib/inFlightLock')
+const noteLock = inFlightLock('delivery')
 
 const LABELS_DIR = path.join(__dirname, '..', '..', 'uploads', 'gls_labels')
 fs.mkdirSync(LABELS_DIR, { recursive: true })
@@ -132,6 +134,18 @@ function resolveCountryIso(countryName) {
   if (!countryName) return 'ES'
   if (countryName.length === 2) return countryName.toUpperCase()
   return COUNTRY_NAME_TO_ISO[countryName.toLowerCase().trim()] || 'ES'
+}
+
+// Un albarán "ha movido stock" si ya pasó por picking/envío o tiene movimientos de salida.
+// A partir de ahí no se puede borrar ni cambiar sus piezas/cantidades.
+const STOCK_MOVED_STATUSES = ['READY', 'SHIPPED', 'DELIVERED']
+async function hasStockMoved(note) {
+  if (STOCK_MOVED_STATUSES.includes(note.status)) return true
+  const mov = await prisma.stockMovement.findFirst({
+    where: { reference_type: 'DELIVERY', reference_id: note.id },
+    select: { id: true }
+  })
+  return !!mov
 }
 
 async function logEvent(delivery_note_id, status, user_name = null, tx = prisma) {
@@ -352,7 +366,7 @@ router.post('/', async (req, res) => {
 })
 
 // PUT /api/deliveries/:id — update header + replace lines (only DRAFT)
-router.put('/:id', async (req, res) => {
+router.put('/:id', noteLock, async (req, res) => {
   const id = Number(req.params.id)
   try {
     const { odoo_partner_id, odoo_partner_name, shipping_address, notes, client_ref, parcels, lines, gls_retorno, gls_horario, gls_incoterm, gross_weight_kg, needs_proforma } = req.body
@@ -370,7 +384,23 @@ router.put('/:id', async (req, res) => {
       ...(needs_proforma !== undefined && { needs_proforma: needs_proforma === true }),
     }
 
-    if (lines) {
+    const current = lines ? await prisma.deliveryNote.findUnique({ where: { id }, include: { lines: true } }) : null
+    if (lines && current && await hasStockMoved(current)) {
+      // Stock ya descontado: no se pueden cambiar piezas ni cantidades.
+      // Solo se acepta actualizar el precio aduanero, sin recrear las líneas (conserva el picking).
+      const remaining = [...current.lines]
+      const updates = []
+      for (const l of lines) {
+        const idx = remaining.findIndex(r => r.part_id === Number(l.part_id) && r.quantity === Number(l.quantity))
+        if (idx === -1) break
+        updates.push({ id: remaining[idx].id, customs_price: l.customs_price != null ? Number(l.customs_price) : null })
+        remaining.splice(idx, 1)
+      }
+      if (updates.length !== lines.length || remaining.length > 0) {
+        return res.status(409).json({ error: 'No se pueden cambiar piezas ni cantidades: este albarán ya ha descontado stock' })
+      }
+      await prisma.$transaction(updates.map(u => prisma.deliveryNoteLine.update({ where: { id: u.id }, data: { customs_price: u.customs_price } })))
+    } else if (lines) {
       await prisma.deliveryNoteLine.deleteMany({ where: { delivery_note_id: id } })
       updateData.lines = {
         create: lines.map(l => ({
@@ -394,12 +424,14 @@ router.put('/:id', async (req, res) => {
   }
 })
 
-// DELETE /api/deliveries/:id — DRAFT always; others only with ?force=1
-router.delete('/:id', async (req, res) => {
+// DELETE /api/deliveries/:id — DRAFT always; CONFIRMED/PICKING only with ?force=1;
+// never once stock has moved (READY/SHIPPED/DELIVERED or with stock movements)
+router.delete('/:id', noteLock, async (req, res) => {
   const id = Number(req.params.id)
   const force = req.query.force === '1'
   const note = await prisma.deliveryNote.findUnique({ where: { id } })
   if (!note) return res.status(404).json({ error: 'Delivery note not found' })
+  if (await hasStockMoved(note)) return res.status(409).json({ error: 'No se puede eliminar: este albarán ya ha descontado stock' })
   if (note.status !== 'DRAFT' && !force) return res.status(409).json({ error: 'Only DRAFT notes can be deleted' })
   await prisma.deliveryNoteLine.deleteMany({ where: { delivery_note_id: id } })
   await prisma.deliveryNote.delete({ where: { id } })
@@ -407,7 +439,7 @@ router.delete('/:id', async (req, res) => {
 })
 
 // POST /api/deliveries/:id/confirm — DRAFT → CONFIRMED (stock NOT decremented here, happens at picking/ship)
-router.post('/:id/confirm', async (req, res) => {
+router.post('/:id/confirm', noteLock, async (req, res) => {
   const id = Number(req.params.id)
   const note = await prisma.deliveryNote.findUnique({
     where: { id },
@@ -442,7 +474,7 @@ router.post('/:id/confirm', async (req, res) => {
 })
 
 // POST /api/deliveries/:id/start-picking — CONFIRMED → PICKING
-router.post('/:id/start-picking', async (req, res) => {
+router.post('/:id/start-picking', noteLock, async (req, res) => {
   const id = Number(req.params.id)
   const note = await prisma.deliveryNote.findUnique({ where: { id }, include: { lines: true } })
   if (!note) return res.status(404).json({ error: 'Delivery note not found' })
@@ -457,7 +489,7 @@ router.post('/:id/start-picking', async (req, res) => {
 
 // POST /api/deliveries/:id/verify-line — marca una línea como verificada
 // body: { line_id, user_id, forced, force_reason, scanned_location }
-router.post('/:id/verify-line', async (req, res) => {
+router.post('/:id/verify-line', noteLock, async (req, res) => {
   const id = Number(req.params.id)
   const { line_id, user_id, forced = false, force_reason, scanned_location } = req.body
   const note = await prisma.deliveryNote.findUnique({
@@ -562,7 +594,7 @@ router.post('/:id/verify-line', async (req, res) => {
 })
 
 // POST /api/deliveries/:id/close-picking — PICKING → READY (manual)
-router.post('/:id/close-picking', async (req, res) => {
+router.post('/:id/close-picking', noteLock, async (req, res) => {
   const id = Number(req.params.id)
   const note = await prisma.deliveryNote.findUnique({ where: { id } })
   if (!note) return res.status(404).json({ error: 'Delivery note not found' })
@@ -578,7 +610,7 @@ router.post('/:id/close-picking', async (req, res) => {
 // POST /api/deliveries/:id/ship — READY → SHIPPED
 // carrier=GLS: auto-generates label via GLS integration
 // carrier=DACHSER (or other): marks shipped immediately, tracking can be added later
-router.post('/:id/ship', async (req, res) => {
+router.post('/:id/ship', noteLock, async (req, res) => {
   const id = Number(req.params.id)
   const { carrier } = req.body
   const note = await prisma.deliveryNote.findUnique({ where: { id } })
@@ -677,7 +709,7 @@ router.post('/:id/ship', async (req, res) => {
 
 // POST /api/deliveries/:id/cancel-gls — cancel GLS shipment via BorraServicios, revert to READY
 // POST /api/deliveries/:id/force-ready — admin: force status back to READY without calling GLS
-router.post('/:id/force-ready', async (req, res) => {
+router.post('/:id/force-ready', noteLock, async (req, res) => {
   const id = Number(req.params.id)
   const note = await prisma.deliveryNote.findUnique({ where: { id } })
   if (!note) return res.status(404).json({ error: 'Albarán no encontrado' })
@@ -690,7 +722,7 @@ router.post('/:id/force-ready', async (req, res) => {
   res.json(updated)
 })
 
-router.post('/:id/cancel-gls', async (req, res) => {
+router.post('/:id/cancel-gls', noteLock, async (req, res) => {
   const id = Number(req.params.id)
   const note = await prisma.deliveryNote.findUnique({ where: { id } })
   if (!note) return res.status(404).json({ error: 'Albarán no encontrado' })
@@ -714,7 +746,7 @@ router.post('/:id/cancel-gls', async (req, res) => {
 })
 
 // PATCH /api/deliveries/:id/tracking — update tracking number on a shipped note (e.g. DACHSER)
-router.patch('/:id/tracking', async (req, res) => {
+router.patch('/:id/tracking', noteLock, async (req, res) => {
   const id = Number(req.params.id)
   const { gls_tracking } = req.body
   const note = await prisma.deliveryNote.findUnique({ where: { id } })
@@ -908,7 +940,7 @@ router.get('/:id/packing-list', async (req, res) => {
 })
 
 // GET /api/deliveries/albaranes-pdf?date=YYYY-MM-DD — batch packing lists for a date
-router.post('/:id/deliver', async (req, res) => {
+router.post('/:id/deliver', noteLock, async (req, res) => {
   const id = Number(req.params.id)
   const note = await prisma.deliveryNote.findUnique({ where: { id } })
   if (!note) return res.status(404).json({ error: 'Delivery note not found' })

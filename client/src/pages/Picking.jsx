@@ -107,7 +107,11 @@ export default function Picking() {
     verifyLine(line, false, null, scannedText.trim())
   }
 
+  // Ignora escaneos/clics repetidos mientras se verifica una línea
+  const verifyingRef = useRef(false)
   async function verifyLine(line, forced, reason, scannedLocation = null) {
+    if (verifyingRef.current) return
+    verifyingRef.current = true
     try {
       const updated = await api.verifyLine(Number(id), {
         line_id: line.id,
@@ -120,6 +124,8 @@ export default function Picking() {
       loadFifo(updated.lines)
     } catch (err) {
       alert(err.message)
+    } finally {
+      verifyingRef.current = false
     }
   }
 

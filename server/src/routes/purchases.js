@@ -4,6 +4,7 @@ const prisma = require('../lib/prisma')
 const PDFKit = require('pdfkit')
 const path = require('path')
 const fs = require('fs')
+const orderLock = require('../lib/inFlightLock')('purchase')
 
 // --- helpers ---
 
@@ -247,7 +248,7 @@ router.delete('/:id', async (req, res) => {
 })
 
 // POST /api/purchases/:id/validate — step 1: confirm quantities arrived → LOCATING
-router.post('/:id/validate', async (req, res) => {
+router.post('/:id/validate', orderLock, async (req, res) => {
   const id = Number(req.params.id)
   const { lines } = req.body // [{ line_id, quantity_validated }]
 
@@ -281,7 +282,7 @@ router.post('/:id/validate', async (req, res) => {
 })
 
 // POST /api/purchases/:id/locate — step 2: place in location → updates PartLocation + stock
-router.post('/:id/locate', async (req, res) => {
+router.post('/:id/locate', orderLock, async (req, res) => {
   const id = Number(req.params.id)
   const { line_id, location, quantity, user_name } = req.body
 
@@ -356,7 +357,7 @@ router.post('/:id/locate', async (req, res) => {
 })
 
 // POST /api/purchases/:id/receive — legacy: keep for backwards compat, redirects to old logic
-router.post('/:id/receive', async (req, res) => {
+router.post('/:id/receive', orderLock, async (req, res) => {
   const id = Number(req.params.id)
   const { lines, notes } = req.body
 
