@@ -4,6 +4,7 @@ const cors = require('cors')
 const helmet = require('helmet')
 const path = require('path')
 const requireAuth = require('./middleware/auth')
+const requireWrite = require('./middleware/requireWrite')
 
 const app = express()
 
@@ -62,6 +63,14 @@ app.use('/api', (req, res, next) => {
   const cronSecret = process.env.CRON_SECRET
   if (cronSecret && req.headers['x-cron-secret'] === cronSecret) return next()
   return requireAuth(req, res, next)
+})
+
+// Bloquear mutaciones para rol viewer
+app.use('/api', (req, res, next) => {
+  if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method)) {
+    return requireWrite(req, res, next)
+  }
+  next()
 })
 
 app.use('/api/parts',       require('./routes/parts'))

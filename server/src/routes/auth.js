@@ -13,7 +13,7 @@ const loginLimiter = rateLimit({
   legacyHeaders: false,
 })
 
-const VALID_ROLES = ['admin', 'agente_sat', 'agente_almacen', 'operator']
+const VALID_ROLES = ['admin', 'agente_sat', 'agente_almacen', 'operator', 'viewer']
 
 // POST /api/auth/login — público, con rate limit
 router.post('/login', loginLimiter, async (req, res) => {

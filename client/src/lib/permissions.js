@@ -3,12 +3,14 @@ export const ROLES = {
   agente_sat:     { label: 'Agente SAT',      color: 'bg-blue-100 text-blue-700' },
   agente_almacen: { label: 'Agente Almacén',  color: 'bg-green-100 text-green-700' },
   operator:       { label: 'Operario',         color: 'bg-gray-100 text-gray-600' },
+  viewer:         { label: 'Solo lectura',     color: 'bg-yellow-100 text-yellow-700' },
 }
 
 export function getPermissions(role) {
   const isAdmin   = role === 'admin'
   const isSAT     = role === 'agente_sat'
   const isAlmacen = role === 'agente_almacen'
+  const isViewer  = role === 'viewer'
 
   return {
     nav: {
