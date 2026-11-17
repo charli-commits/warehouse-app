@@ -130,12 +130,19 @@ function needsCustoms(country) {
   return !EU_ISO.has(iso)
 }
 
-// Odoo sometimes stores Italian (and other) zip codes with province prefix: MN46051 → 46051
-// Strip leading 2-letter alphabetic prefix when followed only by digits (not UK-style codes)
+// Clean zip codes from Odoo quirks:
+// - Strip leading 2-letter province prefix when followed by digits: MN46051 → 46051
+// - Normalize spaces: "4750 006" → "4750-006" (Portuguese 4+3 pattern), others → remove space
 function sanitizeZip(zip) {
   if (!zip) return ''
-  const stripped = String(zip).trim().replace(/^[A-Z]{2}(\d+)$/i, '$1')
-  return stripped
+  let z = String(zip).trim()
+  // Strip 2-letter province prefix followed by digits only (Italian style)
+  z = z.replace(/^[A-Z]{2}(\d+)$/i, '$1')
+  // Portuguese format: 4 digits + space + 3 digits → 4 digits + dash + 3 digits
+  z = z.replace(/^(\d{4}) (\d{3})$/, '$1-$2')
+  // Any remaining internal spaces → remove
+  z = z.replace(/ /g, '')
+  return z
 }
 
 // Valid nacional combos (from ES-GLS-Maestros_V2.xlsx "Servicios&Horarios"):
