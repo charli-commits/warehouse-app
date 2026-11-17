@@ -43,6 +43,11 @@ export default function Locations() {
     await api.setLocationStatus(location, status)
   }
 
+  async function setLocationAudit(location, audit) {
+    setLocations(prev => prev.map(l => l.location === location ? { ...l, audit } : l))
+    await api.setLocationAudit(location, audit)
+  }
+
   return (
     <div className="p-4 md:p-8">
       <div className="flex items-center justify-between mb-4 md:mb-6">
@@ -112,6 +117,20 @@ export default function Locations() {
                       <option value="Llena">Llena</option>
                       <option value="Medio Llena">Medio Llena</option>
                       <option value="Vacía">Vacía</option>
+                    </select>
+                    <select
+                      value={loc.audit || ''}
+                      onClick={e => e.stopPropagation()}
+                      onChange={e => setLocationAudit(loc.location, e.target.value || null)}
+                      className={`text-xs font-medium rounded-md px-2 py-1 border focus:outline-none focus:ring-2 focus:ring-blue-400 ${
+                        loc.audit === 'Inventariado' ? 'bg-blue-100 text-blue-700 border-blue-200' :
+                        loc.audit === 'No inventariado' ? 'bg-orange-100 text-orange-700 border-orange-200' :
+                        'bg-gray-100 text-gray-400 border-gray-200'
+                      }`}
+                    >
+                      <option value="">— inventario —</option>
+                      <option value="Inventariado">Inventariado</option>
+                      <option value="No inventariado">No inventariado</option>
                     </select>
                     <span className={`text-gray-400 transition-transform ${isOpen ? 'rotate-180' : ''}`}>▾</span>
                   </div>

@@ -28,22 +28,28 @@ router.post('/predefined', async (req, res) => {
 
 // GET /api/locations — all locations with parts and totals
 router.get('/', async (req, res) => {
-  const [rows, statusSetting] = await Promise.all([
+  const [rows, statusSetting, auditSetting] = await Promise.all([
     prisma.partLocation.findMany({
       include: {
         part: { select: { id: true, code: true, name: true, unit: true, stock_min: true } }
       },
       orderBy: { location: 'asc' }
     }),
-    prisma.setting.findUnique({ where: { key: 'location_statuses' } })
+    prisma.setting.findUnique({ where: { key: 'location_statuses' } }),
+    prisma.setting.findUnique({ where: { key: 'location_audits' } })
   ])
 
   const statuses = statusSetting ? JSON.parse(statusSetting.value) : {}
+  const audits = auditSetting ? JSON.parse(auditSetting.value) : {}
 
   // Group by location
   const map = {}
   for (const row of rows) {
-    if (!map[row.location]) map[row.location] = { location: row.location, total_stock: 0, parts: [], status: statuses[row.location] || null }
+    if (!map[row.location]) map[row.location] = {
+      location: row.location, total_stock: 0, parts: [],
+      status: statuses[row.location] || null,
+      audit: audits[row.location] || null
+    }
     map[row.location].total_stock += row.stock
     map[row.location].parts.push({
       id: row.part.id,
@@ -73,6 +79,25 @@ router.put('/status', async (req, res) => {
     where: { key: 'location_statuses' },
     update: { value: JSON.stringify(statuses) },
     create: { key: 'location_statuses', value: JSON.stringify(statuses) }
+  })
+  res.json({ ok: true })
+})
+
+// PUT /api/locations/audit — { location, audit }
+router.put('/audit', async (req, res) => {
+  const { location, audit } = req.body
+  if (!location) return res.status(400).json({ error: 'location requerido' })
+  const setting = await prisma.setting.findUnique({ where: { key: 'location_audits' } })
+  const audits = setting ? JSON.parse(setting.value) : {}
+  if (audit) {
+    audits[location] = audit
+  } else {
+    delete audits[location]
+  }
+  await prisma.setting.upsert({
+    where: { key: 'location_audits' },
+    update: { value: JSON.stringify(audits) },
+    create: { key: 'location_audits', value: JSON.stringify(audits) }
   })
   res.json({ ok: true })
 })

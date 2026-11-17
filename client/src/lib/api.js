@@ -104,6 +104,7 @@ export const api = {
   deleteLocation: (name) => request(`/locations/${encodeURIComponent(name)}`, { method: 'DELETE' }),
   createLocation: (name) => request('/locations/predefined', { method: 'POST', body: { name } }),
   setLocationStatus: (location, status) => request('/locations/status', { method: 'PUT', body: { location, status } }),
+  setLocationAudit: (location, audit) => request('/locations/audit', { method: 'PUT', body: { location, audit } }),
 
   // Categories
   getCategories: () => request('/parts/categories'),
